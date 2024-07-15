@@ -1,5 +1,4 @@
 ---
-title: "MGT7179 Assignment Report"
 author: "SURIYA SUBBIAH PERUMAL (40423910)"
 date: "15/03/2024"
 output: html_document
