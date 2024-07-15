@@ -1,0 +1,1866 @@
+---
+author: "SURIYA SUBBIAH PERUMAL "
+date: "15/03/2024"
+output: html_document
+params:
+  logo: "Q:/SEM-2/AAML/logo.png"
+---
+
+```{r logo-image, echo=FALSE, results='asis'}
+cat(paste0("![](", params$logo, ")"))
+```
+
+
+
+```{r "Packages" , echo=FALSE, include= FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(openxlsx)
+library(dlookr)
+library(dplyr)
+library(pROC)
+library(ggplot2)
+library(kableExtra)
+library(glmnet)
+library(readr)
+library(caret)
+library(car)
+library(tidyverse)
+library("gt")
+library(purrr)
+library(knitr)
+library(patchwork)
+library(MASS)
+library(reshape2)
+library(xtable)
+```
+
+# Introduction 
+
+This report embarks on a meticulous journey through the intricacies of a dataset, driven by the quest to unravel underlying patterns and predict key outcomes. Initially, the dataset is meticulously extracted and subjected to thorough analysis, shedding light on its inherent characteristics and potential biases. Recognizing the significance of unbiased data in driving robust conclusions, a deliberate effort is made to create a pristine subset, ensuring the integrity and reliability of subsequent analyses. Harnessing the power of visualization techniques, the dataset is brought to life, offering compelling insights into its nuances and trends. Building upon this foundation, the dataset is further dissected into subsets, each tailored to explore specific factors of interest. Employing Lasso regression, to evaluate the top predictive variables were meticulously unearthed within each subset, paving the way for informed decision-making. Subsequently, logistic regression and Linear Discriminant Analysis (LDA) models are meticulously crafted and juxtaposed across the subsets, with the aim of discerning the most effective predictive method. Through a blend of statistical rigor and advanced modeling, this report endeavors to offer actionable insights and recommendations, poised to empower stakeholders with the tools needed to navigate complex decision landscapes.
+**Note:** During the extraction of the datset, line 116 of the Rmarkdown file was changed from from "start_index <- (i - 1) * 30 + 1" to "start_index <- (i - 1) * 3 + 1"..
+```{r "Data Load", echo=FALSE, include=TRUE}
+#Loading Data
+df0  <- read.csv("Q:/output_40423910.csv")
+table1 <- table(df0$product.field_description)
+gt_table1 <- as.data.frame(table1) %>%
+  gt() %>%
+  tab_header(
+    title = html("<span style='color: darkgreen;'>Product Field Description</span>"),
+    subtitle = html("<span style='color: green;'>Summary Table</span>")
+  ) %>%
+  tab_options(
+    heading.background.color = "lightgreen",
+    heading.title.font.size = 14,
+    heading.title.font.weight = "bold",
+    heading.subtitle.font.size = 12
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "lightyellow"),
+    locations = cells_body()
+  ) %>%
+  tab_style(
+    style = cell_text(color = "blue", weight = "bold"),
+    locations = cells_body(columns = TRUE)
+  )
+
+# Creating a table for Product.issue.consequence
+table2 <- table(df0$Proudct.issue.consequence)
+gt_table2 <- as.data.frame(table2) %>%
+  gt() %>%
+  tab_header(
+    title = html("<span style='color: darkred;'>Product Issue Consequence</span>"),
+    subtitle = html("<span style='color: red;'>Summary Table</span>")
+  ) %>%
+  tab_options(
+    heading.background.color = "lightcoral",
+    heading.title.font.size = 14,
+    heading.title.font.weight = "bold",
+    heading.subtitle.font.size = 12
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "lightblue"),
+    locations = cells_body()
+  ) %>%
+  tab_style(
+    style = cell_text(color = "darkblue", weight = "bold"),
+    locations = cells_body(columns = TRUE)
+  )
+
+# Display the tables
+gt_table1
+gt_table2
+```
+
+# Creating New Dataframe
+
+In order to ensure an unbiased representation of the dataset, a rigorous selection process was undertaken. Initially, the extracted dataset was scrutinized to identify observations categorized under "malfunction" and "injury" within the `product.issue.consequence` variable. Subsequently, a stratified random sampling approach was employed, whereby 500,000 data points associated with "malfunction" and 150,000 data points linked to "injury" were deliberately chosen. This method ensured proportional representation of both critical categories within the new dataset. Importantly, all other observations falling outside of the aforementioned categories were meticulously retained, thereby preserving the integrity and comprehensiveness of the dataset. By incorporating such a meticulously designed sampling strategy, the resulting dataset stands as a robust and unbiased representation of the underlying data, fostering reliable analysis and insights in subsequent investigations.
+
+```{r "Creating New Dataframe", echo=FALSE, include=TRUE}
+
+# Number of observations to sample for each category
+n_malfunction <- 500000
+n_injury <- 150000
+
+# Filter observations based on conditions
+df_malfunction <- df0 %>%
+  filter(Proudct.issue.consequence == "Malfunction") %>%
+  sample_n(n_malfunction, replace = TRUE)
+
+df_injury <- df0 %>%
+  filter(Proudct.issue.consequence == "Injury") %>%
+  sample_n(n_injury, replace = TRUE)
+
+df_others <- df0 %>%
+  filter(Proudct.issue.consequence != "Malfunction" & Proudct.issue.consequence != "Injury")
+
+# Combine the sampled dataframes
+df <- bind_rows(df_malfunction, df_injury, df_others)
+
+
+## Checking the difference in distribution between base dataframe and new dataframe
+ggplot(df0, aes(x =  Proudct.issue.consequence)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  geom_text(stat = 'count', aes(label = ..count..), vjust = -0.5) + # Add count labels above bars
+  labs(title = "Distribution of Product Issue Consequence in Base Dataset",
+       x = "Product Issue Consequence",
+       y = "Count") +
+  theme_minimal()
+ggplot(df, aes(x =  Proudct.issue.consequence)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  geom_text(stat = 'count', aes(label = ..count..), vjust = -0.5) + # Add count labels above bars
+  labs(title = "Distribution of Product Issue Consequence in Base Dataset",
+       x = "Product Issue Consequence",
+       y = "Count") +
+  theme_minimal()
+```
+
+# Statistical Summary
+
+The refinement process from the original dataset (df) to df2, by eliminating variables containing entirely zero values, marks a critical enhancement in data quality and analytical potential. This cleanup effort removed non-informative variables, such as various classifications with over 0.6 million zeros each, thereby streamlining the dataset for more effective analysis. Such a significant reduction of redundant data not only minimizes computational demands but also likely improves the accuracy of insights by focusing on meaningful variables. However, this process also highlights the initial dataset's limitations, including the presence of extensive non-active entries and the necessity for more targeted data collection or variable creation strategies.
+
+```{r "Statistical Summary" , echo = FALSE, include= TRUE}
+library(kableExtra)
+library(dplyr)
+
+# Check the dimensions of the new dataframe
+dim_df <- dim(df)
+
+# Create a dataframe to hold this information
+dim_df <- data.frame(
+  Description = c("Number of Rows", "Number of Columns"),
+  Value = dim_df
+)
+
+# Displaying dimensions 
+kable(dim_df) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>%
+  add_header_above(c("Dimension of the New Dataframe" = 2)) %>%
+  column_spec(1, background = "#ADD8E6", color = "navy") %>%
+  column_spec(2, background = "#E0FFFF")
+
+# Function to count zeros and NAs in a vector
+count_values <- function(vec) {
+  list(zeros = sum(vec == 0, na.rm = TRUE), NAs = sum(is.na(vec)))
+}
+
+# Applying the function across all columns and create a summary data frame
+summary_counts <- map_df(df, count_values)
+
+# Adding variable names as a new column
+summary_counts <- bind_cols(Variable = names(df), summary_counts)
+
+# Filtering to show only variables with at least one zero or NA
+summary_counts_filtered <- summary_counts %>%
+  filter(zeros > 0 | NAs > 0)
+
+# Display filtered summary counts 
+kable(summary_counts_filtered) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>%
+  add_header_above(c("Summary of Zero and NA Values" = 3)) %>%
+  column_spec(2, background = "#FFD700") %>%
+  column_spec(3, background = "#FF69B4") %>%
+  row_spec(0, background = "#32CD32", color = "navy", bold = TRUE)
+
+df2 <- df %>%
+  select_if(~any(. != 0, na.rm = TRUE))
+
+# Identify variables (columns) present in df but missing in df2
+missing_vars <- setdiff(names(df), names(df2))
+
+# Create a data frame for these missing variables
+missing_vars_df <- tibble(Variable = missing_vars)
+
+# Generate table 
+kable(missing_vars_df) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>%
+  add_header_above(c("Missing Variables in df2" = 1)) %>%
+  row_spec(0, background = "#32CD32", color = "navy", bold = TRUE) %>%
+  column_spec(1, background = "#FFD700")
+
+rows_with_zeros_last_year <- df %>%
+  dplyr::select(starts_with("last_year")) %>%
+  apply(1, function(row) all(row == 0))
+
+rows_with_zeros_last_two_years <- df %>%
+  dplyr::select(matches("^last_two_years")) %>%
+  apply(1, function(row) all(row == 0))
+
+rows_with_zeros_last_four_years <- df %>%
+  dplyr:: select(matches("^last_four_years")) %>%
+  apply(1, function(row) all(row == 0))
+
+# Combine the checks with an OR condition
+rows_with_zeros_condition <- (rows_with_zeros_last_year | rows_with_zeros_last_two_years | rows_with_zeros_last_four_years)
+
+# Filter the dataset to only include rows that meet the OR condition
+filtered_rows <- df[rows_with_zeros_condition, ]
+
+
+# Count the number of rows with all zeros for each time period category
+count_rows_with_zeros_last_year <- sum(rows_with_zeros_last_year)
+count_rows_with_zeros_last_two_years <- sum(rows_with_zeros_last_two_years)
+count_rows_with_zeros_last_four_years <- sum(rows_with_zeros_last_four_years)
+
+summary_table <- tibble(
+  Time_Period = c("Last Year", "Last Two Years", "Last Four Years"),
+  Zero_Value_Rows = c(
+    count_rows_with_zeros_last_year, 
+    count_rows_with_zeros_last_two_years, 
+    count_rows_with_zeros_last_four_years
+  )
+)
+
+
+kable(summary_table) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>%
+  add_header_above(c("Summary of Rows with All Zeros" = 2)) %>%
+  row_spec(0, background = "#32CD32", color = "navy", bold = TRUE) %>%
+  column_spec(1, background = "#ADD8E6") %>%
+  column_spec(2, background = "#E0FFFF")
+
+
+
+# summary_counts 
+kable(summary_counts) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>%
+  add_header_above(c("Summary of Zero, NA, and Blank Values Across All Variables" = 3)) %>%
+  column_spec(2, background = "#FFD700") %>%
+  column_spec(3, background = "#FF69B4") %>%
+  row_spec(0, background = "#32CD32", color = "navy", bold = TRUE)
+
+
+```
+
+Furthermore, remaining variables with high counts of zeros or NAs, like `type_of_report.1` and `product.product_operator`, underscore the ongoing need for meticulous data cleaning and potential imputation to fully leverage the dataset's analytical capacity. This transition reflects a deliberate move towards enhancing the integrity and utility of the data, emphasizing the importance of rigorous data management practices in uncovering reliable, actionable insights.
+
+
+
+# Making neccessary covertions for qualitative or categorical variables
+
+In refining our dataset for enhanced analytical clarity, we embarked on a targeted transformation of the `Proudct.issue.consequence` variable, reclassifying it into binary values to streamline the complexity of adverse outcomes, with "Death" marked as "1" and all other outcomes like "Injury" and "Malfunction" labeled "0." While this simplification aids in focusing our analysis, it potentially glosses over the nuanced differences between various outcomes. We further converted character variables to factors to suit statistical analyses better, a necessary step that demands careful consideration of the implications on data interpretability. Additionally, variables such as `date_event` and `ID_non_uniq` was a remomved, albeit at the risk of omitting valuable insights. The correction of a spelling error in `Proudct.issue.consequence` underscores our attention to detail and accuracy. These transformations, aimed at data optimization, highlight the balancing act between simplification and the preservation of meaningful detail, emphasizing the critical nature of our preprocessing decisions in shaping the integrity and utility of our analysis.Further duplicate entries were also removed.
+
+```{r "Converting Categorical Variables" , echo=FALSE, include= FALSE}
+dfD <- df %>%
+  mutate(`Proudct.issue.consequence` = case_when(
+    `Proudct.issue.consequence` == "Malfunction" ~ "1",
+    `Proudct.issue.consequence` %in% c("Injury", "Other", "Death", "No answer provided") ~ "0",
+    TRUE ~ as.character(`Proudct.issue.consequence`) # Handle any other unexpected case
+  )) 
+dfD <- dfD %>%
+  mutate(across(where(is.character), as.factor))
+dfD <- dfD[, !(names(dfD) %in% c("date_event","ID_non_uniq"))]
+
+#Correcting the target variable spelling
+dfD <- dfD %>%
+  rename(`Product.issue.consequence1` = `Proudct.issue.consequence`)
+
+```
+
+# Visualizations
+
+## Visualization - 1 - Distribution of issue consequences
+
+The first graph presents a detailed breakdown of issues by consequence categories, highlighting an alarming prevalence of malfunctions, which might suggest a need for improved product design or quality control. The second graph, with its binary categorization of 'Death' versus 'Non-Death', raises concerns about the potential downplay of serious non-fatal incidents. While fatalities are fortunately rare, grouping all non-fatal outcomes together masks the individual significance of 'Injury' and other severe categories, potentially skewing stakeholder perception and undermining targeted safety improvements. This aggregation could lead to a lack of nuanced understanding of the data, resulting in oversimplified risk assessments and possibly neglecting the importance of addressing serious but non-fatal product issues.
+
+```{r "Visualization - 1" , echo=FALSE, include= TRUE}
+# Define specific manufacturer states to focus on
+manufacturer_state <- c("8", "48","63")
+
+# Filter the dataframe to only include rows with the specified manufacturer states
+subset_df <- df %>% 
+  filter(product.manufacturer_state %in% manufacturer_state)
+
+# Recategorize 'Consequence' into two broad categories for simplification
+subset_df$Consequence_Category <- ifelse(subset_df$Proudct.issue.consequence == "Malfunction", 
+                                                      "Malfunction", 
+                                                      "Non-Malfunction")
+
+columns_to_factor <- c("manufacturer_contact_address_1", "product.brand_name", "product.generic_name", 
+                       "product.issue.type", "type_of_report.1", "reporter_job_code", "source_type",
+                       "product.manufacturer_name", "product.product_operator", "product.manufacturer_city", 
+                       "product.manufacturer_state", "product.manufacturer_country", "product.field_description",
+                       "product.product_report_product_code")
+
+subset_df[columns_to_factor] <- lapply(subset_df[columns_to_factor], as.factor)
+# Defining a bright color palette
+colors <- c("Death" = "#FF6666", "Injury" = "#FFCC66", "Malfunction" = "#66CC66", 
+                     "No Answer Provided" = "#66CCCC", "Other" = "#CC66CC")
+
+# Generate the first plot with cheerful colors
+plot1 <- ggplot(df, aes(x = Proudct.issue.consequence, fill = Proudct.issue.consequence)) +
+  geom_bar(show.legend = FALSE) +
+  scale_fill_manual(values = colors) +
+  labs(title = "Total Number of Issues by Consequence Category",
+       x = "Consequence Category", y = "Total Issues") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+library(ggplot2)
+
+# Define a color vector with two colors for the two categories
+colors <- c("0" = "#FF9999", "1" = "#9999FF")  # Light red for '0', light blue for '1'
+
+# Create the plot using the defined colors
+plot2 <- ggplot(dfD, aes(x = Product.issue.consequence1, fill = as.factor(Product.issue.consequence1))) +
+  geom_bar(show.legend = FALSE) +
+  scale_fill_manual(values = colors) +  # Apply the colors
+  labs(title = "Total Number of Issues by Consequence Category",
+       x = "Consequence Category", y = "Total Issues") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+# Print the plots
+print(plot1)
+print(plot2)
+```
+
+## Visualization-2: Distribution of issue consequences - top 5 brands
+
+The bar chart illustrates the distribution of reported issues for five brands, with each issue categorized as either 'Malfunction' or 'Non-Malfunction'. For all brands except the one identified as '215539', 'Malfunction' appears to be the predominant issue, which could be a concern for product reliability. '215539' presents a significant number of both 'Malfunction' and 'Non-Malfunction' issues, possibly indicating a wider range of problems or a more even distribution of issue types. The brand '215539' also has the highest total number of reported issues, with a larger proportion of 'Malfunctions', which may point to quality control challenges. However, without context on the brand's market presence, it's difficult to draw firm conclusions about the severity of these findings. The chart suggests a need for further analysis to understand the root causes of malfunctions---be it manufacturing, design, or user error---and the nature of non-malfunction reports. The companies behind these brands would benefit from investigating these factors to potentially enhance product quality and safety.
+
+```{r "Visualization-2", echo=FALSE, include= TRUE}
+# Focus on top 5 brands by issue count, showing distribution of issue consequences for different brandsnames
+top_categories <- df %>%
+  group_by(product.brand_name) %>%
+  summarize(Count = n()) %>%
+  top_n(5, Count) %>%
+  pull(product.brand_name)
+
+ggplot(data = subset_df %>% filter(product.brand_name %in% top_categories), 
+               aes(x = product.brand_name, fill = Consequence_Category)) +
+  geom_bar() +
+  scale_fill_brewer(palette = "Set3") +  
+  labs(title = "Distribution of Issues by Brand Name",
+       x = "Brand Name", y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  
+
+```
+
+## Visulaization - 3
+
+## Top Product Code Manufactured in Each Country
+
+The bar chart presents a logarithmic-scale comparison of product manufacturing counts across different countries, with countries denoted by numerical codes and products by color-coded categories. This scale choice highlights disparities that span orders of magnitude and allows for a more comprehensible visual comparison of vastly different counts. While the chart effectively indicates possible manufacturing specializations and comparative advantages by showing which product codes are most prevalent in each country, it does not provide complete context. The true identity of the countries and the nature of the product codes are obscured, and the graph does not account for external factors that could influence these numbers. Furthermore, the logarithmic scale can mask the actual differences in manufacturing counts, where visually small gaps on the chart may represent significant numerical differences, emphasizing the need for careful interpretation when analyzing data on such scales.
+
+```{r "Visualization-3", echo=FALSE, include= TRUE}
+counts <- df %>%
+  count(product.manufacturer_country, product.product_report_product_code) %>%
+  group_by(product.manufacturer_country) %>%
+  top_n(3, n) %>%
+  ungroup() %>%
+  arrange(product.manufacturer_country, desc(n))
+
+# Define a color palette with enough colors, or use a predefined one
+color_palette <- RColorBrewer::brewer.pal("Set3", n = min(12, length(unique(counts$product.product_report_product_code))))
+
+ggplot(counts, aes(x = product.manufacturer_country, y = n, fill = product.product_report_product_code)) +
+  geom_col(position = position_dodge()) +
+  scale_y_log10() +  # Apply a logarithmic scale
+  scale_fill_manual(values = color_palette) +  # Use the color palette
+  theme_minimal(base_size = 14) +  # Increase the base text size
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, color = "#333366"),  # Color and angle the x-axis text
+        plot.title = element_text(face = "bold", color = "#336699"),  # Color the plot title
+        plot.subtitle = element_text(face = "italic", color = "#666699"),  # Color the plot subtitle
+        legend.position = "bottom",  # Move the legend to the bottom
+        legend.title = element_text(face = "bold", color = "#336699")) +  # Color the legend title
+  labs(title = "Top Product Codes Manufactured in Each Country",
+       subtitle = "Displayed on a Logarithmic Scale for Better Visibility",
+       x = "Manufacturer Country", y = "Count of Products (Log Scale)",
+       fill = "Product Code")  # Add a legend title
+```
+
+## Visulaization - 4
+
+## Count of product Codes by product issue Consequence
+
+The graph uses a facetted design with independent scales to showcase the distribution of issues for the most frequently reported product codes, segmented by consequence categories such as Death, Injury, Malfunction, along with 'No answer provided' and 'Other'. It reveals a concerning concentration of issues within specific product codes, especially within the Injury and Malfunction categories, indicated by the tall yellow bars, suggesting these products might have underlying quality or safety issues that warrant closer inspection. Conversely, the categories 'No answer provided' and 'Other' show minimal counts, which could point to less frequent issues or possibly data collection and categorization inconsistencies. The vibrant yellow color used aims to draw attention but may necessitate careful consideration to avoid diminishing the gravity of the issues, while the graph's varied scales pose questions about the comparability of data across different consequences, highlighting the importance of scale choice in data representation for accurate interpretation and analysis.
+
+```{r "Visualization-4", echo=FALSE, include= TRUE}
+
+top_product_codes <- df %>%
+  count(product.product_report_product_code) %>%
+  top_n(5, n) %>%
+  pull(product.product_report_product_code)
+
+# Filter the main data frame to include only the top product codes
+df_top <- df %>%
+  filter(product.product_report_product_code %in% top_product_codes)
+
+# Plot the graph with adjustments for visibility and color
+ggplot(df_top, aes(x = product.product_report_product_code, fill = product.product_report_product_code)) +
+  geom_bar(show.legend = FALSE) +
+  facet_wrap(~ Proudct.issue.consequence, scales = "free_y") +
+  scale_fill_manual(values = c("#ff9999", "#99cc00", "#9999ff", "#ffcc00", "#ff66ff")) +
+  labs(title = "Count of Top Five Product Codes by Issue Consequence",
+       subtitle = "Bright and Bold Representation",
+       x = "Product Code", y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12, color = "black"),
+        plot.title = element_text(size = 18, face = "bold"),
+        plot.subtitle = element_text(size = 14, face = "italic"))
+
+
+```
+
+## Visulaization - 5
+
+## Issues Over Time
+
+The graph illustrates a monthly breakdown of reported issues in 2014, where an ascending trend peaks in July and descends thereafter, suggesting a potential seasonal influence or operational cycle within the observed industry. The utilization of varying colors serves merely to distinguish between months without implying additional meaning. Critical analysis necessitates examining external factors such as market behavior, product use cycles, or reporting deadlines that could elucidate the mid-year surge and subsequent decline. To affirm the observed pattern's consistency or identify anomalies, this data should be juxtaposed with other temporal data, with a keen eye on industry-specific developments or shifts that might impact these figures.
+
+```{r "Visualization-5", echo=FALSE, include= TRUE}
+# Ensuring the date_event column is in Date format
+df$date_event <- as.Date(df$date_event)
+
+# Extracting year and month from the date
+df$year <- format(df$date_event, "%Y")
+df$month <- format(df$date_event, "%m")
+
+# Filtering for the years 2013 and 2014 only
+df_filtered <- df %>% filter(year %in% c("2014"))
+
+# Ploting the data, faceting by year, and making it colorful
+ggplot(df_filtered, aes(x = month, fill = month)) + 
+  geom_histogram(stat = "count", bins = 12, position = "dodge") + # 12 bins for 12 months
+  scale_fill_brewer(palette = "Spectral") + # Colorful palette
+  labs(title = "Number of Issues Over Time", 
+       subtitle = "Monthly Data for 2014",
+       x = "Month", y = "Count of Issues") +
+  facet_grid(. ~ year) + # Facet by year
+  theme_minimal() +
+  theme(legend.position = "none") 
+```
+
+## Creating Subset based on unique product.field_description and equal subsetting of the entire data
+
+The creation of the four subsets from the dataset is guided by the intent to distill the data into more manageable sections for focused analysis. The first subset targets data from a specific manufacturer state, labeled '8', which is the most prolific due to its prominence in the dataset. The second subset hones in on records associated with the product code 'OYC', a priority is given to this product for detailed scrutiny, due to its high report rate. Similarly, the third subset filters by a particular brand name, '215795', singling out the brand for closer examination, and the fourth subset is based on a 'source_type' value of '6', indicating a subset of data derived from a specific source type.
+
+Upon creation, each subset has the identifying column removed, signifying a shift in focus away from the attribute used for segmentation. This removal implies that subsequent analyses are designed to probe deeper into issue patterns, effects, or trends within homogenized groups, free from the influence of the initial segregating factor. Each subset maintains 74 columns, indicative of a breadth of variables still available for investigation. This approach is efficient for targeted analysis but may potentially overlook interactions between the removed variable and other factors, raising the importance of understanding the rationale behind each filtering decision to ensure that the analytical focus remains aligned with the overarching research objectives.
+
+```{r "Subsetting" , echo=FALSE, include= TRUE}
+# Create a subset where product.manufacturer_state is 8, since it is the highest
+subset1 <- subset(dfD, product.manufacturer_state == 8)
+subset1 <- subset1[, !(names(subset1) %in% c("product.manufacturer_state"))]
+# Create a subset where product.product_report_product_code is OYC, , since it is the highest
+subset2 <- subset(dfD,product.product_report_product_code == "OYC" )
+subset2 <- subset2[, !(names(subset2) %in% c("product.product_report_product_code"))]
+# Create a subset where product.product_report_product_code is OYC, , since it is the highest
+subset3 <- subset(dfD,product.brand_name == "215795" )
+subset3 <- subset3[, !(names(subset3) %in% c("product.brand_name"))]
+# Create a subset where product.product_report_product_code is OYC, , since it is the highest
+subset4 <- subset(dfD,source_type == "6" )
+subset4 <- subset4[, !(names(subset4) %in% c("source_type"))]
+
+# The dimensions of each subset to confirm they've been split correctly
+subset1_dims <- dim(subset1)
+subset2_dims <- dim(subset2)
+subset3_dims <- dim(subset3)
+subset4_dims <- dim(subset4)
+ 
+
+# Creating a data frame for the dimensions
+subset_dimensions_df <- tibble(
+  Subset = c( "Subset1", "Subset2", "Subset3","Subset4"),
+  Rows = c(subset1_dims[1], subset2_dims[1], subset3_dims[1],subset4_dims[1]),
+  Columns = c( subset1_dims[2], subset2_dims[2], subset3_dims[2],subset4_dims[2])
+)
+
+# Generating a gt table for display with vibrant colors
+subset_dimensions_df %>%
+  gt() %>%
+  tab_header(
+    title = "Subset Dimensions",
+    subtitle = "Rows and Columns in Each Subset"
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "#FFC0CB"), # Apply a single color
+    locations = cells_body(columns = everything())
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(columns = everything())
+  ) %>%
+  tab_options(
+    heading.background.color = "#FFD700", # Golden for the header background
+    heading.title.font.size = 16,
+    heading.title.font.weight = "bold",
+    heading.subtitle.font.size = 14,
+    table.background.color = "#FFFFFF" # White for table background
+  )
+
+```
+
+# Lasso Regression
+
+## Lasso Regression - (Subset-1)
+
+In our analysis, we employed Lasso regression, a method favored for its capability to simplify models by enforcing sparsity through penalty application on coefficients. This approach is particularly advantageous when dealing with datasets containing a multitude of predictors, as it accentuates the most influential variables while diminishing the less relevant ones to zero. By utilizing the `glmnet` package in R, we partitioned our data into training and test subsets, ensuring the reliability and generalizability of our model. A sequence of lambda values was tested to identify the optimal level of penalization that would yield a model with a balance between complexity and predictive accuracy. The selected lambda value was determined via cross-validation using `cv.glmnet`, which minimized the prediction error, thus avoiding the risk of overfitting.
+
+The outcome of the Lasso regression was promising, with an accuracy of approximately 79.75%, signifying a robust model performance. However, a deeper inspection via a confusion matrix revealed a discrepancy between sensitivity and specificity, highlighting a lower predictive success rate for the minority class. Such a distinction is crucial in our context, where misclassification can bear significant consequences. Furthermore, the model's coefficients extracted from the top predictors, following the principle of Occam's razor, provided a clear indication of the most significant factors influencing product issue consequences. This analytic journey, from data preparation to model evaluation, not only enhanced our understanding of the critical predictors but also underscored the importance of model interpretability and the delicate balance between model complexity and explanatory power.
+**Note:**  The correlation among the leading predictor variables was examined, and those with high correlation were excluded to avoid redundancy.
+
+```{r "Lasso - 1", echo=FALSE, include= TRUE}
+
+# Loading 
+data <- subset1
+
+# Preparing data for modeling
+x <- model.matrix(Product.issue.consequence1 ~ ., data = data)[, -1]
+y <- data$Product.issue.consequence1
+
+# Set seed for reproducibility
+set.seed(40423910)
+
+# Spliting data into training and test sets
+train_indices <- sample(1:nrow(x), size = nrow(x) * 0.8)
+test_indices <- setdiff(1:nrow(x), train_indices)
+
+x_train <- x[train_indices, ]
+y_train <- y[train_indices]
+x_test <- x[test_indices, ]
+y_test <- y[test_indices]
+
+# Defining the grid for lambda
+grid <- 10^seq(10, -2, length = 100)
+
+# Fiting the lasso model on the training set
+lasso_mod <- glmnet(x_train, y_train, alpha = 1, lambda = grid, family = "binomial")
+plot(lasso_mod)
+
+# Performing cross-validation for lambda selection
+cv_lasso_mod <- cv.glmnet(x_train, y_train, alpha = 1, family = "binomial")
+plot(cv_lasso_mod)
+
+# Extracting the best lambda value
+best_lambda <- cv_lasso_mod$lambda.min
+
+# Make predictions on the test set with the best lambda
+predictions <- predict(cv_lasso_mod, newx = x_test, s = "lambda.min", type = "response")
+
+# Convert probabilities to binary outcomes using a threshold
+predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+
+# Calculating and print accuracy
+accuracy <- mean(predicted_classes == y_test)
+cat("Accuracy:", accuracy, "\n")
+
+# Extracting and print the non-zero coefficients for top predictors
+coef_full <- coef(cv_lasso_mod, s = "lambda.min")
+coef_full_df <- as.data.frame(as.matrix(coef_full))
+coef_full_df$Predictor <- rownames(coef_full_df)
+names(coef_full_df)[1] <- "Coefficient"
+non_zero_coef_full <- coef_full_df[coef_full_df$Coefficient != 0, ]
+
+# Assuming the non_zero_coef_full dataframe exists and contains the coefficients of predictors
+library(caret)
+library(pROC)
+
+# Sorting by the absolute value of coefficients to find the top predictors
+top_predictors1 <- non_zero_coef_full[order(abs(non_zero_coef_full$Coefficient), decreasing = TRUE), ]
+
+# Assuming 'predicted_classes' and 'y_test' are defined for your model's predictions and actual outcomes
+# Building a confusion matrix to see the prediction performance
+conf_matrix <- confusionMatrix(as.factor(predicted_classes), as.factor(y_test))
+print(conf_matrix)
+
+# ROC Curve
+roc_obj1 <- roc(y_test, predictions[,1]) # assuming binary outcome, adjust the column index if necessary
+
+# Plotting ROC curve
+plot(roc_obj1, main="ROC Curve for Lasso Regression - 1")
+
+# Saving the top predictors for future reference  
+top_predictor_variables_1 <- rownames(top_predictors1)[1:20] # Adjusting to select the top 10 predictors
+
+# Assuming dfD is your dataframe
+variable_names <- names(dfD) 
+
+# Find and print variables that exactly match the ones in top_predictor_variables_1
+matched_variables <- variable_names[variable_names %in% top_predictor_variables_1]
+top_predictor_variables_1 <- matched_variables
+
+# Checking and removing if highly correlated variables to avoid multicollinearity
+# Calculate the correlation matrix for the top predictors
+cor_matrix <- cor(x_train[, top_predictor_variables_1])
+
+# Visualize the correlation matrix
+# This is optional but helps in understanding the correlations visually
+library(corrplot)
+corrplot(cor_matrix, method = "circle")
+
+# Define a high correlation threshold, for example, 0.75
+high_cor_threshold <- 0.75
+
+# Find highly correlated pairs without duplicates and self-correlation
+high_cor_pairs <- findCorrelation(cor_matrix, cutoff = high_cor_threshold, exact = TRUE)
+
+
+# Print out the names of variables to be removed due to high correlation
+cat("Variables to be removed due to high correlation:\n", top_predictor_variables_1[high_cor_pairs], "\n")
+
+# Remove the highly correlated predictors from the top predictors list
+top_predictor_variables_1 <- top_predictor_variables_1[-high_cor_pairs]
+
+# Now, 'top_predictor_variables_1' contains variables adjusted for high correlations
+cat("Adjusted top predictors:\n", top_predictor_variables_1, "\n")
+
+
+```
+
+## Lasso Regression - (Subset-2)
+
+In the analysis of subset2, Lasso regression was executed to pinpoint critical predictors for the consequence associated with product issues. By assigning a penalty to the absolute size of the regression coefficients, Lasso aids in eliminating less influential predictors, thereby simplifying the model. This technique is particularly beneficial when dealing with datasets that contain numerous predictors. Our Lasso model fitting on the training set incorporated a range of lambda values to determine the optimal amount of regularization. Cross-validation was utilized to identify the best lambda that minimizes the prediction error, ensuring that our model neither overfits nor underfits the data.
+
+The best lambda from the cross-validation process was used to make predictions on the test set. An accuracy of approximately 80.24% was achieved, demonstrating the model's effectiveness in classifying the outcomes correctly. However, the confusion matrix reveals that the model is more accurate in predicting the majority class than the minority class, as indicated by the sensitivity and specificity values. The model's capability is further depicted through the ROC curve, confirming the trade-off between sensitivity and specificity. The non-zero coefficients, representative of the model's selected predictors, were extracted, presenting us with insights into the variables that play a pivotal role in determining the consequence of a product issue. Through careful analysis and selection, the Lasso regression model has enabled us to focus on the most salient features within the dataset, aligning with our objective of uncovering the top, critical predictors.
+**Note:**  The correlation among the leading predictor variables was examined, and those with high correlation were excluded to avoid redundancy.
+```{r  "Lasso - 2", echo=FALSE, include= TRUE}
+# Loading 
+data <- subset2
+
+# Preparing data for modeling
+x <- model.matrix(Product.issue.consequence1 ~ ., data = data)[, -1]
+y <- data$Product.issue.consequence1
+
+# Set seed for reproducibility
+set.seed(40423910)
+
+# Spliting data into training and test sets
+train_indices <- sample(1:nrow(x), size = nrow(x) * 0.8)
+test_indices <- setdiff(1:nrow(x), train_indices)
+
+x_train <- x[train_indices, ]
+y_train <- y[train_indices]
+x_test <- x[test_indices, ]
+y_test <- y[test_indices]
+
+# Defining the grid for lambda
+grid <- 10^seq(10, -2, length = 100)
+
+# Fiting the lasso model on the training set
+lasso_mod <- glmnet(x_train, y_train, alpha = 1, lambda = grid, family = "binomial")
+plot(lasso_mod)
+
+# Performing cross-validation for lambda selection
+cv_lasso_mod <- cv.glmnet(x_train, y_train, alpha = 1, family = "binomial")
+plot(cv_lasso_mod)
+
+# Extracting the best lambda value
+best_lambda <- cv_lasso_mod$lambda.min
+
+# Making predictions on the test set with the best lambda
+predictions <- predict(cv_lasso_mod, newx = x_test, s = "lambda.min", type = "response")
+
+# Converting probabilities to binary outcomes using a threshold
+predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+
+# Calculating and print accuracy
+accuracy <- mean(predicted_classes == y_test)
+cat("Accuracy:", accuracy, "\n")
+
+# Extract and print the non-zero coefficients for top predictors
+coef_full <- coef(cv_lasso_mod, s = "lambda.min")
+coef_full_df <- as.data.frame(as.matrix(coef_full))
+coef_full_df$Predictor <- rownames(coef_full_df)
+names(coef_full_df)[1] <- "Coefficient"
+non_zero_coef_full <- coef_full_df[coef_full_df$Coefficient != 0, ]
+print(non_zero_coef_full)
+
+# Sorting by the absolute value of coefficients to find the top predictors
+top_predictors2 <- non_zero_coef_full[order(abs(non_zero_coef_full$Coefficient), decreasing = TRUE), ]
+print(top_predictors2)
+
+# Building a confusion matrix to see the prediction
+conf_matrix <- confusionMatrix(as.factor(predicted_classes), as.factor(y_test))
+print(conf_matrix)
+
+# ROC Curve
+roc_obj <- roc(y_test, predictions[,1]) # assuming binary outcome
+# Plot ROC curve
+plot(roc_obj, main="ROC Curve for Lasso Regression - 2 ")
+
+# Saving the top predictors for future reference  
+top_predictor_variables_2 <- rownames(top_predictors2)[1:20] # Adjusting to select the top 10 predictors
+
+# Assuming dfD is your dataframe
+variable_names <- names(dfD) 
+
+# Find and print variables that exactly match the ones in top_predictor_variables_1
+matched_variables2 <- variable_names[variable_names %in% top_predictor_variables_2]
+print(matched_variables2)
+top_predictor_variables_2 <- matched_variables2
+
+# Calculate the correlation matrix for the selected predictors in 'x_train'
+cor_matrix <- cor(x_train[, top_predictor_variables_2], use="complete.obs") # 'use="complete.obs"' ensures NA values are handled appropriately
+
+# Visualize the correlation matrix
+library(corrplot)
+corrplot(cor_matrix, method = "circle")
+
+# Sum of absolute correlations for each variable
+cor_sums <- apply(abs(cor_matrix), 1, sum) - 1 # Subtract 1 to exclude self-correlation
+
+# Sort variables by their sum of absolute correlations
+sorted_vars <- sort(cor_sums, decreasing = FALSE)
+
+# Select the names of the 8 variables with the lowest sum of absolute correlations
+selected_vars <- names(sorted_vars)[1:8]
+
+# Update 'top_predictor_variables_2' to contain only these selected variables
+top_predictor_variables_2 <- selected_vars
+
+# Print out the names of the selected variables
+cat("Variables selected with the lowest correlation:\n", top_predictor_variables_2, "\n")
+
+top_predictor_variables_2
+
+```
+
+## Lasso Regression - (Subset-3)
+
+In our third subset analysis utilizing Lasso regression, we endeavored to discern the pivotal predictors influencing product issue consequences. Lasso's inherent feature selection capability was leveraged to impose sparsity, thereby streamlining the predictors to those that have a substantial impact. Our data, drawn from subset3, underwent preprocessing to create a design matrix 'x' and a binary outcome vector 'y', setting the stage for the regression. We stratified the data into training and testing cohorts, ensuring the model's ability to generalize. The optimal penalty strength for the regression coefficients was ascertained through cross-validation, selecting a lambda value that strikes a balance between model simplicity and prediction fidelity.
+
+Post-selection, the Lasso model demonstrated an accuracy rate of 77.34%, indicating a reasonably proficient performance in predicting outcomes. Yet, the confusion matrix revealed an imbalance, with the model showing a tendency to better predict the majority class, a finding reflected in the sensitivity and specificity metrics. This dissonance is pivotal as it can guide future model improvements or data collection strategies. The ROC curve corroborated these findings, providing a visual representation of the model's true positive rate against the false positive rate. By pinpointing and interpreting the non-zero coefficients, we gained insights into the key drivers of product issue consequences, aligning with our objective of isolating the most impactful predictors. This selection is paramount, as it informs subsequent actions and potential interventions aimed at mitigating the issues associated with the products under scrutiny.
+**Note:**  The correlation among the leading predictor variables was examined, and those with high correlation were excluded to avoid redundancy.
+```{r  "Lasso - 3", echo=FALSE, include= TRUE}
+# Loading 
+data <- subset3
+
+# Preparing data for modeling
+x <- model.matrix(Product.issue.consequence1 ~ ., data = data)[, -1]
+y <- data$Product.issue.consequence1
+
+# Set seed for reproducibility
+set.seed(40423910)
+
+# Spliting data into training and test sets
+train_indices <- sample(1:nrow(x), size = nrow(x) * 0.8)
+test_indices <- setdiff(1:nrow(x), train_indices)
+
+x_train <- x[train_indices, ]
+y_train <- y[train_indices]
+x_test <- x[test_indices, ]
+y_test <- y[test_indices]
+
+# Defining the grid for lambda
+grid <- 10^seq(10, -2, length = 100)
+
+# Fiting the lasso model on the training set
+lasso_mod <- glmnet(x_train, y_train, alpha = 1, lambda = grid, family = "binomial")
+plot(lasso_mod)
+# Performing cross-validation for lambda selection
+cv_lasso_mod <- cv.glmnet(x_train, y_train, alpha = 1, family = "binomial")
+plot(cv_lasso_mod)
+# Extract the best lambda value
+best_lambda <- cv_lasso_mod$lambda.min
+
+# Make predictions on the test set with the best lambda
+predictions <- predict(cv_lasso_mod, newx = x_test, s = "lambda.min", type = "response")
+
+# Convert probabilities to binary outcomes using a threshold
+predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+
+# Calculating and print accuracy
+accuracy <- mean(predicted_classes == y_test)
+cat("Accuracy:", accuracy, "\n")
+
+# Extracting and print the non-zero coefficients for top predictors
+coef_full <- coef(cv_lasso_mod, s = "lambda.min")
+coef_full_df <- as.data.frame(as.matrix(coef_full))
+coef_full_df$Predictor <- rownames(coef_full_df)
+names(coef_full_df)[1] <- "Coefficient"
+non_zero_coef_full <- coef_full_df[coef_full_df$Coefficient != 0, ]
+
+# Sorting by the absolute value of coefficients to find the top predictors
+top_predictors3 <- non_zero_coef_full[order(abs(non_zero_coef_full$Coefficient), decreasing = TRUE), ]
+
+
+# Build a confusion matrix to see the prediction
+conf_matrix <- confusionMatrix(as.factor(predicted_classes), as.factor(y_test))
+print(conf_matrix)
+
+# ROC Curve
+roc_obj <- roc(y_test, predictions[,1]) # assuming binary outcome
+
+# Ploting ROC curve
+plot(roc_obj, main="ROC Curve for Lasso Regression - 3 ")
+
+# Saving the top predictors for future reference  
+top_predictor_variables_3 <- rownames(top_predictors3)[1:20] # Adjusting to select the top 10 predictors
+
+# Assuming dfD is your dataframe
+variable_names <- names(dfD) 
+
+# Find and print variables that exactly match the ones in top_predictor_variables_1
+matched_variables3 <- variable_names[variable_names %in% top_predictor_variables_3]
+top_predictor_variables_3 <- matched_variables3
+
+# Calculate the correlation matrix for the selected predictors in 'x_train'
+cor_matrix <- cor(x_train[, top_predictor_variables_3], use="complete.obs") # 'use="complete.obs"' ensures NA values are handled appropriately
+
+# Visualize the correlation matrix
+library(corrplot)
+corrplot(cor_matrix, method = "circle")
+
+# Sum of absolute correlations for each variable
+cor_sums <- apply(abs(cor_matrix), 1, sum) - 1 # Subtract 1 to exclude self-correlation
+
+# Sort variables by their sum of absolute correlations
+sorted_vars <- sort(cor_sums, decreasing = FALSE)
+
+# Select the names of the 8 variables with the lowest sum of absolute correlations
+selected_vars <- names(sorted_vars)[1:8]
+
+# Update 'top_predictor_variables_2' to contain only these selected variables
+top_predictor_variables_3 <- selected_vars
+
+# Print out the names of the selected variables
+cat("Variables selected with the lowest correlation:\n", top_predictor_variables_3, "\n")
+
+top_predictor_variables_3
+## Plot to visualize the Correlation between variab
+plot_data <- non_zero_coef_full %>%
+  arrange(desc(abs(Coefficient))) %>%
+  mutate(variable = reorder(Predictor, Coefficient)) # Reorder for the plot
+
+# Plotting the coefficients
+ggplot(plot_data, aes(x = Coefficient, y = variable)) +
+  geom_bar(stat = "identity", fill = "#32CD32") +
+  theme(axis.text.x = element_text(size=9, angle = 90, vjust = 0.5, hjust=1)) +
+  xlab("Coefficient") + ylab("Variable")
+```
+
+## Lasso Regression - (Subset-4)
+
+In subset4's analysis through Lasso regression, we focused on filtering the significant predictors from a considerable number of potential factors influencing product issue consequences. Lasso regression, known for its regularization and feature selection, was instrumental in distilling the dataset to its essence by assigning penalties to the regression coefficients. By shrinking less significant predictor coefficients to zero, we retained only the most impactful variables. After the training phase, cross-validation with a defined lambda range determined the optimal regularization strength, ensuring the model's balance between accuracy and complexity.
+
+The model's efficacy was encapsulated in an accuracy rate of 79.34%, indicative of its robust classification capability. However, this surface-level metric was nuanced by the confusion matrix and ROC curve, which revealed a model more adept at predicting the majority class, as evidenced by the sensitivity and specificity. The extracted non-zero coefficients illuminated the most salient predictors, providing critical insights into factors driving product issue consequences. This granularity is vital, as it underpins focused interventions. It also reminds us of the potential for model improvement, particularly in predicting less prevalent outcomes, an endeavor that is as much about refining data as it is about refining the model itself.
+**Note:** The correlation among the leading predictor variables was examined, and those with high correlation were excluded to avoid redundancy.
+```{r  "Lasso - 4", echo=FALSE, include= TRUE}
+
+# Loading 
+data <- subset4
+
+# Preparing data for modeling
+x <- model.matrix(Product.issue.consequence1 ~ ., data = data)[, -1]
+y <- data$Product.issue.consequence1
+
+# Set seed for reproducibility
+set.seed(40423910)
+
+# Spliting data into training and test sets
+train_indices <- sample(1:nrow(x), size = nrow(x) * 0.8)
+test_indices <- setdiff(1:nrow(x), train_indices)
+
+x_train <- x[train_indices, ]
+y_train <- y[train_indices]
+x_test <- x[test_indices, ]
+y_test <- y[test_indices]
+
+# Defining the grid for lambda
+grid <- 10^seq(10, -2, length = 100)
+
+# Fitting  the lasso model on the training set
+lasso_mod <- glmnet(x_train, y_train, alpha = 1, lambda = grid, family = "binomial")
+plot(lasso_mod)
+
+# Performing cross-validation for lambda selection
+cv_lasso_mod <- cv.glmnet(x_train, y_train, alpha = 1, family = "binomial")
+plot(cv_lasso_mod)
+
+# Extracting the best lambda value
+best_lambda <- cv_lasso_mod$lambda.min
+
+# Make predictions on the test set with the best lambda
+predictions <- predict(cv_lasso_mod, newx = x_test, s = "lambda.min", type = "response")
+
+# Converting probabilities to binary outcomes using a threshold
+predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+
+# Calculating and print accuracy
+accuracy <- mean(predicted_classes == y_test)
+cat("Accuracy:", accuracy, "\n")
+
+# Extracting and print the non-zero coefficients for top predictors
+coef_full <- coef(cv_lasso_mod, s = "lambda.min")
+coef_full_df <- as.data.frame(as.matrix(coef_full))
+coef_full_df$Predictor <- rownames(coef_full_df)
+names(coef_full_df)[1] <- "Coefficient"
+non_zero_coef_full <- coef_full_df[coef_full_df$Coefficient != 0, ]
+
+# Sorting by the absolute value of coefficients to find the top predictors
+top_predictors4 <- non_zero_coef_full[order(abs(non_zero_coef_full$Coefficient), decreasing = TRUE), ]
+
+# Building a confusion matrix to see the prediction
+conf_matrix <- confusionMatrix(as.factor(predicted_classes), as.factor(y_test))
+print(conf_matrix)
+
+# ROC Curve
+roc_obj <- roc(y_test, predictions[,1]) # assuming binary outcome
+
+# Ploting ROC curve
+plot(roc_obj, main="ROC Curve for Lasso Regression - 4 ")
+
+# Saving the top predictors for future reference  
+top_predictor_variables_4 <- rownames(top_predictors4)[1:20] # Adjusting to select the top 10 predictors
+
+# Assuming dfD is your dataframe
+variable_names <- names(dfD) 
+
+# Find and print variables that exactly match the ones in top_predictor_variables_1
+matched_variables4 <- variable_names[variable_names %in% top_predictor_variables_4]
+top_predictor_variables_4 <- matched_variables4
+top_predictor_variables_4
+
+## Plot to visualize the Correlation between variab
+plot_data <- non_zero_coef_full %>%
+  arrange(desc(abs(Coefficient))) %>%
+  mutate(variable = reorder(Predictor, Coefficient)) # Reorder for the plot
+
+# Plotting the coefficients
+ggplot(plot_data, aes(x = Coefficient, y = variable)) +
+  geom_bar(stat = "identity", fill = "#FF6666") +
+  theme(axis.text.x = element_text(size=9, angle = 90, vjust = 0.5, hjust=1)) +
+  xlab("Coefficient") + ylab("Variable")
+```
+
+# Top Variables fromt Lasso Regression
+
+In consolidating the results of the Lasso regression analyses from four subsets, the R code effectively identifies and compiles a unique set of pivotal predictors. By collating top variables from each subset and extracting the non-redundant factors, the code creates a curated list that represents the most influential predictors across all models. This list is then neatly formatted into a visually distinct HTML table, ensuring that the key findings are not only accessible but also prominently displayed for further analytical scrutiny or decision-making processes. This streamlined approach underscores the rigor of our statistical methodology and serves as a foundation for subsequent strategic recommendations.
+
+```{r "Top Variable From Lasso" , echo=FALSE, include= TRUE}
+# Combine all the sets into one vector and find unique variables
+combined_variables <- c(top_predictor_variables_1, top_predictor_variables_2, 
+                        top_predictor_variables_3, top_predictor_variables_4)
+unique_top_variables <- unique(combined_variables)
+
+# Create a data frame for printing
+unique_top_variables_df <- data.frame("Top_Variable_From_all_subsets" = unique_top_variables)
+
+# Use kable to create a table and then style it with kableExtra
+kable(unique_top_variables_df, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>%
+  row_spec(0, background = "blue", color = "white") %>%
+  column_spec(1, background = "orange")
+
+```
+
+# Logistic regression 
+## Logistic regression - (Subset-1)
+
+In our analysis, we constructed a logistic regression model to predict the binary outcome variable `Product.issue.consequence1`. Initial variable selection was conducted using LASSO regression, ensuring a robust set of predictors while mitigating multicollinearity. The model's accuracy varied across different trials, peaking at approximately 79.27%. Examination of the model coefficients revealed that variables such as `last_year_reason_for_legal_announcement_num_uniq` significantly influenced the outcome, as indicated by the corresponding low p-values, signifying a rejection of the null hypothesis. Other variables did not show statistical significance, indicating that they do not have a strong predictive relationship with the outcome under the current model settings.
+
+The Receiver Operating Characteristic (ROC) curve, with an Area Under the Curve (AUC) of 0.8329, demonstrates the model's good predictive discrimination capacity between the positive and negative classes. However, the confusion matrix suggests an imbalance with a higher number of false negatives than false positives, which is a critical aspect to consider in the clinical decision-making process where the cost of different types of errors can be uneven. Despite the model's satisfactory performance, one must consider the practical significance of predictors, and the balance between sensitivity and specificity should be critically evaluated. It is essential to note that the reported accuracies and statistical significance do not necessarily imply causation and should be complemented with external validation and domain expertise before application.
+
+```{r  "Logistic Regression - 1", echo=FALSE, include= TRUE}
+
+# Ensuring 'top_predictor_variables_1' contains only existing column names in 'subset1'
+
+existing_columns <- top_predictor_variables_1[top_predictor_variables_1 %in% names(subset1)]
+
+# Safely selecting existing columns and the target variable
+
+model_data <- subset1 %>%
+
+dplyr::select(dplyr::all_of(existing_columns), Product.issue.consequence1)
+
+# Splitting data into training and test sets
+
+set.seed(40423910) # For reproducibility
+
+train_indices <- sample(1:nrow(model_data), size = nrow(model_data) * 0.8)
+
+test_indices <- setdiff(1:nrow(model_data), train_indices)
+
+train_data <- model_data[train_indices, ]
+
+test_data <- model_data[test_indices, ]
+
+# Assuming 'top_predictor_variables_1' is a vector of variable names
+
+top_predictor_variables_1 <- top_predictor_variables_1[top_predictor_variables_1 %in% names(train_data)]
+
+
+# Logistic Regression Model
+
+formula <- as.formula(paste("Product.issue.consequence1 ~", paste(top_predictor_variables_1, collapse = " + ")))
+
+logistic_model <- glm(formula, data = train_data, family = binomial())
+
+# Model Summary
+
+summary(logistic_model)
+
+# Making predictions on the test set
+
+predictions_prob <- predict(logistic_model, newdata = test_data, type = "response")
+
+predicted_classes <- ifelse(predictions_prob > 0.5, 1, 0)
+
+# Converting predicted classes to the same factor levels as the target variable for accuracy comparison
+
+predicted_classes <- factor(predicted_classes, levels = levels(test_data$Product.issue.consequence1))
+
+# Calculating Accuracy
+
+accuracy <- mean(predicted_classes == test_data$Product.issue.consequence1)
+
+cat("Logistic Regression Model Accuracy:", accuracy, "\n")
+
+# Ensure 'predicted_probabilities' contains the predicted probabilities for the positive class from your model
+roc_obj1 <- roc(response = test_data$Product.issue.consequence1, predictor =predictions_prob)
+auc_obj1 <- auc(roc_obj1)
+
+# Plotting  the ROC curve
+plot(roc_obj1, main = "ROC Curve for Logistic Regression")
+
+# Adding the AUC value to the plot
+text(0.6, 0.2, paste("AUC =", round(auc_obj1, 4)))
+
+
+# Correcting the confusion matrix calculation
+# 'predicted_classes' should be a factor with the same levels as the actual outcome variable
+predicted_classes_factor <- factor(predicted_classes, levels = levels(test_data$Product.issue.consequence1))
+
+# Calculating the confusion matrix using corrected predicted classes
+conf_matrix1<- confusionMatrix(predicted_classes_factor, test_data$Product.issue.consequence1)
+
+# Printing the confusion matrix
+print(conf_matrix1)
+
+library(car)
+vif_values <- vif(logistic_model)
+vif_values 
+```
+
+## Logistic regression - (Subset- 2)
+
+The second logistic regression analysis, aimed at subset 2 and utilizing the most predictive variables identified through LASSO regression, yielded an Area Under the Curve (AUC) of 0.8415. This demonstrates the model's robust ability to differentiate between the binary outcomes in `Product.issue.consequence`. The accuracy of the model was calculated at 80.08%, indicating that the model's predictions align with the actual outcomes 80.08% of the time, which is a reasonable level of accuracy for predictive modeling.
+
+Regarding the model's coefficients, while some predictors, such as `last_year_decision_date_max_changes_in_product`, showed a strong and statistically significant relationship with the outcome, others like `last_year_reason_for_legal_announcement_num_uniq` did not. This could imply that some of the predictor variables may not contribute significantly to the model. Moreover, the presence of coefficients that are not defined due to singularities suggests a possible issue with multicollinearity or redundancy in the predictor variables. The confusion matrix of the model indicates a moderate level of Kappa (0.4495), which reflects an acceptable agreement beyond chance between predicted and observed classifications. The sensitivity (52.62%) and specificity (89.77%) of the model suggest that while it's quite good at identifying true negatives, it's less adept at detecting true positives, which should be a consideration depending on the cost implications of false negatives in the specific application domain.
+
+```{r "Logistic Regression - 2", echo=FALSE, include= TRUE}
+
+# Correcting the conversion of the target variable to factor
+
+subset2$Product.issue.consequence <- as.factor(subset2$Product.issue.consequence)
+
+# Now selecting variables for the model
+library(dplyr)
+
+model_data2 <- subset2 %>%
+  dplyr::select(dplyr::any_of(top_predictor_variables_2), Product.issue.consequence)
+# Splitting data into training and test sets correctly
+
+set.seed(40423910) # For reproducibility
+
+train_indices2 <- sample(1:nrow(model_data2), size = nrow(model_data2) * 0.8)
+
+test_indices2 <- setdiff(1:nrow(model_data2), train_indices2)
+
+train_data2 <- model_data2[train_indices2, ]
+
+test_data2 <- model_data2[test_indices2, ]
+# Ensure 'top_predictor_variables_2' only includes variables present in 'train_data2'
+
+top_predictor_variables_2 <- top_predictor_variables_2[top_predictor_variables_2 %in% names(train_data2)]
+
+
+# Correcting the logistic model fitting with the right formula variable
+
+formula2 <- as.formula(paste("Product.issue.consequence ~", paste(top_predictor_variables_2, collapse = " + ")))
+
+logistic_model2 <- glm(formula2, data = train_data2, family = binomial())
+
+# Model Summary
+
+summary(logistic_model2)
+
+# Making predictions on the test set
+
+predictions_prob2 <- predict(logistic_model2, newdata = test_data2, type = "response")
+
+predicted_classes2 <- ifelse(predictions_prob2 > 0.5, 1, 0)
+
+# Converting predicted classes to the same factor levels as the target variable for accuracy comparison
+
+predicted_classes2 <- factor(predicted_classes2, levels = levels(test_data2$Product.issue.consequence))
+
+# Calculating Accuracy
+
+accuracy2 <- mean(predicted_classes2 == test_data2$Product.issue.consequence)
+
+cat("Logistic Regression Model Accuracy-2:", accuracy2, "\n")
+
+# ROC Curve and AUC for Model 2
+roc_obj2 <- roc(response = test_data2$Product.issue.consequence, predictor = predictions_prob2)
+auc_obj2 <- auc(roc_obj2)
+
+# Plotting ROC Curve for Model 2
+plot(roc_obj2, main = "ROC Curve for Logistic Regression Model 2")
+text(0.6, 0.2, paste("AUC Model 2 =", round(auc_obj2, 4)))
+
+# Confusion Matrix for Model 2
+conf_matrix2 <- confusionMatrix(predicted_classes2, test_data2$Product.issue.consequence)
+print(conf_matrix2)
+vif_values2 <- vif(logistic_model2)
+vif_values2
+```
+
+## Logistic regression - 3
+
+The third iteration of logistic regression analysis, utilizing key variables from LASSO regression on subset 3, has resulted in an ROC curve with an AUC of 0.8188. This indicates that the model has a strong capability to distinguish between the binary classes of the `Product.issue.consequence` variable. An accuracy of 77.08% was achieved, suggesting that the model is fairly reliable in predicting outcomes, though slightly less so than the previous model applied to subset 2.
+
+In this model, coefficients of certain predictors, such as `last_year_reason_for_legal_announcement_num_uniq` and `last_year_decision_date_max_changes_in_product`, were found to be statistically significant with robust z-values, indicating a strong relationship with the outcome variable. This is further substantiated by their significance codes (p \< 0.05). In contrast, coefficients associated with other variables like `last_year_all_product_codes_num_uniq` were not significant, and the presence of NA values for some coefficients indicates issues of singularity in the model. The confusion matrix shows a Kappa of 0.5014, indicating a moderate agreement beyond chance between the model's predictions and actual outcomes. With sensitivity at 67.19% and specificity at 82.87%, the model shows a better balance in predicting true positives compared to the previous models. However, the balance between sensitivity and specificity, as well as the possibility of singularities affecting the model's predictors, should be critically evaluated to understand the implications for real-world application of this model.
+
+```{r "Logistic Regression - 3", echo=FALSE, include=TRUE}
+
+# Convert the target variable to a factor if it's not already
+subset3$Product.issue.consequence <- as.factor(subset3$Product.issue.consequence)
+
+model_data3 <- subset3 %>%
+  dplyr::select(dplyr::any_of(top_predictor_variables_3), Product.issue.consequence)
+# Splitting data into training and test sets
+set.seed(40423910) # For reproducibility
+train_indices3 <- sample(1:nrow(model_data3), size = nrow(model_data3) * 0.8)
+test_indices3 <- setdiff(1:nrow(model_data3), train_indices3)
+
+train_data3 <- model_data3[train_indices3, ]
+test_data3 <- model_data3[test_indices3, ]
+
+# Assuming 'top_predictor_variables_3' is your list of predictor variables
+# Ensure subset3 and model_data3 are properly prepared and include necessary variables
+
+# Verify if each predictor variable exists in the dataset
+existing_variables <- top_predictor_variables_3[top_predictor_variables_3 %in% names(train_data3)]
+
+print(top_predictor_variables_3)
+# Create the formula using only existing variables
+formula3 <- as.formula(paste("Product.issue.consequence ~", paste(top_predictor_variables_3, collapse = " + ")))
+
+# Fit the logistic regression model using the updated formula
+logistic_model3 <- glm(formula3, data = train_data3, family = binomial())
+
+# Model Summary
+summary(logistic_model3)
+
+# Making predictions on the test set
+predictions_prob3 <- predict(logistic_model3, newdata = test_data3, type = "response")
+predicted_classes3 <- ifelse(predictions_prob3 > 0.5, 1, 0)
+
+# Converting predicted classes to the same factor levels as the target variable for accuracy comparison
+predicted_classes3 <- factor(predicted_classes3, levels = levels(test_data3$Product.issue.consequence))
+
+# Calculating Accuracy
+accuracy3 <- mean(predicted_classes3 == test_data3$Product.issue.consequence)
+cat("Logistic Regression Model Accuracy-3:", accuracy3, "\n")
+
+
+# ROC Curve and AUC for Model 3
+roc_obj3 <- roc(response = test_data3$Product.issue.consequence, predictor = predictions_prob3)
+auc_obj3 <- auc(roc_obj3)
+
+# Plotting ROC Curve for Model 3
+plot(roc_obj3, main = "ROC Curve for Logistic Regression Model 3")
+text(0.6, 0.2, paste("AUC Model 3 =", round(auc_obj3, 4)))
+
+# Confusion Matrix for Model 3
+conf_matrix3 <- confusionMatrix(predicted_classes3, test_data3$Product.issue.consequence)
+print(conf_matrix3)
+
+
+
+vif_values3 <- vif(logistic_model3)
+vif_values3
+```
+
+## Logistic Regression - (subset-4)
+
+The fourth logistic regression model, applied to subset 4 and based on predictors identified through LASSO regression, yielded an ROC curve with an AUC of 0.8293. This value suggests a strong discriminative ability of the model between the two outcomes of the `Product.issue.consequence` variable. The accuracy of this model is reported to be 78.67%, which indicates that it correctly predicts the outcome in approximately 78.67% of cases, marking it as a reasonably accurate model.
+
+Key predictors in this model showed a range of influence, with `last_year_brand_name_num_uniq` and `last_year_company_name_most_freq` having a significant impact on the model as denoted by their coefficients and very low p-values, implying a strong negative and positive relationship with the likelihood of the outcome, respectively. However, the presence of predictors with NA coefficients due to singularities suggests that some predictor variables might be highly correlated or redundant. The confusion matrix provides a Kappa statistic of 0.4709, which reflects moderate agreement beyond chance. Sensitivity and specificity stand at 64.45% and 83.89%, respectively, showing a bias towards correctly identifying true negatives over true positives. The results and model diagnostics must be carefully considered, particularly in terms of the model's predictive power and the practical significance of each predictor variable, when deciding on its application in a real-world context.
+
+```{r "Logistic Regression - 4", echo=FALSE, include= TRUE}
+
+# Ensuring 'top_predictor_variables_4' contains only existing column names in 'subset4'
+existing_columns <- top_predictor_variables_4[top_predictor_variables_4 %in% names(subset4)]
+
+# Safely selecting existing columns and the target variable
+model_data <- subset4 %>%
+  dplyr::select(dplyr::all_of(existing_columns), Product.issue.consequence1)
+
+# Splitting data into training and test sets
+set.seed(40423910) # For reproducibility
+
+train_indices <- sample(1:nrow(model_data), size = nrow(model_data) * 0.8)
+test_indices <- setdiff(1:nrow(model_data), train_indices)
+
+train_data <- model_data[train_indices, ]
+test_data <- model_data[test_indices, ]
+
+# Updating 'top_predictor_variables_4' based on 'train_data'
+top_predictor_variables_4 <- top_predictor_variables_4[top_predictor_variables_4 %in% names(train_data)]
+
+# Logistic Regression Model
+formula4 <- as.formula(paste("Product.issue.consequence1 ~", paste(top_predictor_variables_4, collapse = " + ")))
+logistic_model4 <- glm(formula4, data = train_data, family = binomial())
+
+# Model Summary
+summary(logistic_model4)
+
+# Making predictions on the test set
+predictions_prob <- predict(logistic_model4, newdata = test_data, type = "response")
+predicted_classes <- ifelse(predictions_prob > 0.5, 1, 0)
+
+# Converting predicted classes to the same factor levels as the target variable for accuracy comparison
+predicted_classes_factor <- factor(predicted_classes, levels = levels(test_data$Product.issue.consequence1))
+
+# Calculating Accuracy
+accuracy4 <- mean(predicted_classes_factor == test_data$Product.issue.consequence1)
+cat("Logistic Regression Model Accuracy - 4:", accuracy4, "\n")
+
+# ROC and AUC Calculation
+roc_obj4 <- roc(response = test_data$Product.issue.consequence1, predictor = predictions_prob)
+auc_obj4 <- auc(roc_obj4)
+
+# Plotting the ROC curve
+plot(roc_obj4, main = "ROC Curve for Logistic Regression - 4")
+# Adding the AUC value to the plot
+text(0.6, 0.2, paste("AUC =", round(auc_obj4, 4)))
+
+# Confusion Matrix Calculation
+conf_matrix4 <- confusionMatrix(predicted_classes_factor, test_data$Product.issue.consequence1)
+# Printing the confusion matrix
+print(conf_matrix4)
+
+```
+# LDA
+## LDA - (Subset-1)
+
+In assessing the performance of the Linear Discriminant Analysis (LDA) model applied to subset1, the ROC curve indicates an AUC of 0.8328, reflecting a strong capacity for distinguishing between the two classes. This is a positive indicator of the model's overall discriminative power. However, critical examination of the confusion matrix reveals a lower sensitivity (53.25%), suggesting the model's limited effectiveness in identifying true positives, juxtaposed with a high specificity (88.08%), indicating a stronger performance in correctly predicting true negatives. The model's accuracy stands at 79.09%, which surpasses the No Information Rate (74.18%) significantly, as supported by a p-value much less than 0.05, affirming the model's predictive capabilities beyond random chance.
+
+Further analysis exposes a Kappa statistic of 0.4309, indicating a moderate agreement beyond chance, while the balanced accuracy of 70.67% points towards potential biases in the model, specifically towards predicting negative outcomes more reliably than positive ones. This is further substantiated by the values of Positive Predictive Value (60.86%) and Negative Predictive Value (84.41%), the latter affirming the model's robustness in classifying negatives. The statistically significant Mcnemar's test p-value suggests an imbalance in prediction errors, necessitating a careful consideration of the model's application, especially in domains where false negatives carry a substantial risk. The model, although statistically sound, may require adjustments or alternative methodologies to improve sensitivity and address any underlying class imbalance within the dataset.
+
+```{r "LDA - 1", echo=FALSE, include= TRUE}
+set.seed(40423910) # For reproducibility
+
+# Creating indices for the training set
+trainIndex <- createDataPartition(subset1$Product.issue.consequence1, p = .7, list = FALSE, times = 1)
+
+# Splitting the data into training and testing sets
+trainData <- subset1[trainIndex, ]
+testData <- subset1[-trainIndex, ]
+
+# Adjust the predictors string if necessary
+predictors <- paste(top_predictor_variables_1, collapse = " + ")
+formula <- as.formula(paste("Product.issue.consequence1 ~", predictors))
+
+# Fit the LDA model on the training set
+lda.fit <- lda(formula, data = trainData)
+
+# Predict using the LDA model on the testing set
+lda.pred <- predict(lda.fit, testData)
+
+# Extracting the predicted classes
+lda.class <- lda.pred$class
+
+# Converting actual and predicted classes to factor if they are not already
+actual_classes <- factor(testData$Product.issue.consequence1)
+predicted_classes <- factor(lda.class, levels = levels(actual_classes))
+
+# Creating a confusion matrix for the testing set
+conf_matrix11 <- confusionMatrix(predicted_classes, actual_classes)
+
+# Printing the detailed confusion matrix
+print(conf_matrix)
+
+# Calculating and plotting ROC curve and AUC
+# Assuming binary classification and 'lda.pred$posterior' contains class probabilities
+# Selecting the probabilities of the positive class, adjust the column index if necessary
+prob.positive <- lda.pred$posterior[,2]
+
+# Calculating ROC and AUC
+roc_obj11 <- roc(response = actual_classes, predictor = prob.positive)
+auc_obj11 <- auc(roc_obj11)
+
+# Plotting ROC Curve
+plot(roc_obj11, main = "ROC Curve for LDA Model")
+text(0.6, 0.2, paste("AUC =", round(auc_obj11, 4)))
+
+```
+
+## LDA- (Subset-2)
+
+The ROC curve for the LDA Model 2, derived from subset2, exhibits an AUC of 0.8401, which represents an incrementally improved ability to discriminate between the classes compared to the previous model for subset1. This slight enhancement in the AUC suggests that the top predictor variables identified from the lasso regression of subset2 may offer a marginally better fit for the LDA model.
+
+Delving into the confusion matrix and the accompanying statistics, we observe an accuracy of 80.07%, slightly higher than that of the first model, indicating a small but notable improvement in overall predictive correctness. The No Information Rate has been outperformed by the model, corroborated by a highly significant p-value. The Kappa statistic is now at 0.4464, which continues to signify moderate agreement, with the Balanced Accuracy at 70.79%, reinforcing that the model is reasonably calibrated. Despite these enhancements, the sensitivity remains relatively low at 51.32%, suggesting that the model's capacity to identify positive instances still requires refinement. In contrast, the specificity is quite high at 90.26%, affirming the model's strong ability to recognize negative instances. These results highlight a persistent tendency towards better prediction of negatives, necessitating potential model adjustments or a more in-depth examination of the class distribution to ensure that the LDA model is not inherently biased towards the more prevalent class.
+
+```{r "LDA - 2", echo=FALSE, include= TRUE}
+library(caret)
+
+
+set.seed(40423910) # For reproducibility
+
+# Creating indices for the training set
+trainIndex2 <- createDataPartition(subset2$Product.issue.consequence1, p = .7, list = FALSE, times = 1)
+
+# Splitting the data into training and testing sets
+trainData2 <- subset2[trainIndex2, ]
+testData2 <- subset2[-trainIndex2, ]
+
+# Adjust the predictors string if necessary
+predictors2 <- paste(top_predictor_variables_2, collapse = " + ")
+formula2 <- as.formula(paste("Product.issue.consequence1 ~", predictors2))
+
+# Fit the LDA model on the training set
+lda.fit2 <- lda(formula2, data = trainData2)
+
+# Predicting using the LDA model on the testing set
+lda.pred2 <- predict(lda.fit2, testData2)
+
+# Extracting the predicted classes
+lda.class2 <- lda.pred2$class
+
+# Creating a confusion matrix for the testing set
+# Note: Ensure testData2$Product.issue.consequence1 is correctly referenced
+actual_classes2 <- factor(testData2$Product.issue.consequence1)
+predicted_classes2 <- factor(lda.class2, levels = levels(actual_classes2))
+conf_matrix22 <- confusionMatrix(predicted_classes2, actual_classes2)
+
+# Printing the detailed confusion matrix
+print(conf_matrix2)
+
+# Calculating and plotting ROC curve and AUC
+# Assuming binary classification and 'lda.pred2$posterior' contains class probabilities
+# Selecting the probabilities of the positive class, adjust the column index if necessary
+prob_positive2 <- lda.pred2$posterior[,2] # Adjust based on your class labels
+
+# Calculating ROC and AUC
+roc_obj22 <- roc(response = actual_classes2, predictor = prob_positive2)
+auc_obj22 <- auc(roc_obj22)
+
+# Plotting ROC Curve for the second LDA model
+plot(roc_obj22, main = "ROC Curve for LDA Model 2")
+text(0.6, 0.2, paste("AUC Model 2 =", round(auc_obj22, 4)))
+
+```
+
+## LDA -(Subset - 3)
+
+The Receiver Operating Characteristic (ROC) curve for the third Linear Discriminant Analysis (LDA) model, generated from the variables selected through lasso regression on subset3, reveals an Area Under the Curve (AUC) of 0.8197. This AUC reflects the model's robust capability to discriminate between the outcome classes, albeit with a marginal decrease compared to the AUCs obtained from the first two models. With an accuracy rate of 77.09%, the model significantly outperforms the No Information Rate of 65.23%, indicating that the predictions are not based on chance.
+
+A closer examination of the model's diagnostic ability shows an improved sensitivity of 68.13%, enhancing the model's capacity to correctly identify true positives. The specificity, however, is slightly reduced to 81.87%, reflecting a minor compromise in identifying true negatives compared to the earlier models. The Kappa statistic increases to 0.4975, suggesting a stronger agreement between predicted and observed classifications than the prior models, indicative of a balance in predictive performance. Balanced Accuracy stands at a precise 0.7500, which, while fair, points to potential areas for refinement in the model to ensure equitable predictive strength for both classes. The Mcnemar's Test yields a statistically significant result, yet it demonstrates a reduction in the disparity of the prediction errors between false positives and false negatives. This outcome signals a more balanced classification error distribution in this model iteration, highlighting progress towards a more nuanced predictive model, but also underscoring the necessity for further model tuning and validation.
+
+```{r "LDA - 3", echo=FALSE, include= TRUE}
+
+set.seed(40423910) # For reproducibility
+
+# Exclude any predictors not found in 'subset3' from 'top_predictor_variables_3'
+top_predictor_variables_3 <- top_predictor_variables_3[top_predictor_variables_3 %in% names(subset3)]
+
+# Creating indices for the training set
+trainIndex3 <- createDataPartition(subset3$Product.issue.consequence, p = .7, list = FALSE, times = 1)
+
+# Splitting the data into training and testing sets
+trainData3 <- subset3[trainIndex3, ]
+testData3 <- subset3[-trainIndex3, ]
+
+# Adjust the predictors string if necessary
+predictors3 <- paste(top_predictor_variables_3, collapse = " + ")
+formula3 <- as.formula(paste("Product.issue.consequence ~", predictors3))
+
+# Fit the LDA model on the training set
+lda.fit3 <- lda(formula3, data = trainData3)
+
+# Predicting using the LDA model on the testing set
+lda.pred3 <- predict(lda.fit3, testData3)
+
+# Extracting the predicted classes
+lda.class3 <- lda.pred3$class
+
+# Converting actual and predicted classes to factor if they are not already
+actual_classes3 <- factor(testData3$Product.issue.consequence)
+predicted_classes3 <- factor(lda.class3, levels = levels(actual_classes3))
+conf_matrix33 <- confusionMatrix(predicted_classes3, actual_classes3)
+
+# Printing the detailed confusion matrix
+print(conf_matrix33)
+
+# Calculating and plotting ROC curve and AUC
+# Assuming binary classification and 'lda.pred3$posterior' contains class probabilities
+# Selecting the probabilities of the positive class, adjust the column index if necessary
+prob_positive3 <- lda.pred3$posterior[,2] # Adjust based on your class labels
+
+# Calculating ROC and AUC
+roc_obj33 <- roc(response = actual_classes3, predictor = prob_positive3)
+auc_obj33 <- auc(roc_obj33)
+
+# Plotting ROC Curve for the third LDA model
+plot(roc_obj33, main = "ROC Curve for LDA Model 3")
+text(0.6, 0.2, paste("AUC Model 3 =", round(auc_obj33, 4)))
+
+```
+
+## LDA - (Subset-4)
+
+The ROC curve for the fourth Linear Discriminant Analysis (LDA) model, based on the predictors from a lasso regression of subset4, yields an AUC of 0.8284. This value suggests that the model possesses a strong ability to differentiate between the classes, with performance closely aligned to the earlier models. However, when scrutinizing the classification performance through the confusion matrix, the model's accuracy is reported at 78.94%, a figure marginally lower than the second model but comparable to the first. Importantly, the accuracy significantly surpasses the No Information Rate of 73.23%, reinforcing the model's predictive validity.
+
+The model demonstrates a sensitivity of 62.04% and a specificity of 85.11%, which indicates a reasonable capability to identify true positives and a strong ability to confirm true negatives. These metrics suggest that while the model is reasonably good at predicting positive outcomes, there's a slight inclination toward predicting negative outcomes more accurately. The Kappa statistic is 0.4674, reflecting a moderate level of agreement between the predicted and actual classifications, higher than that of the third model. Balanced Accuracy is reported at 73.58%, denoting the model's equal sensitivity to both classes. However, the Mcnemar's Test yields a p-value of 2.089e-08, which points to an imbalance in the model's type I and type II errors, although less pronounced than the first model. These results highlight the model's competency in classification tasks while also indicating potential areas for improvement, particularly in enhancing sensitivity without compromising specificity.
+
+```{r "LDA - 4", echo=FALSE, include= TRUE}
+
+set.seed(40423910) # For reproducibility
+
+# Creating indices for the training set
+trainIndex4 <- createDataPartition(subset4$Product.issue.consequence1, p = .7, list = FALSE, times = 1)
+
+# Splitting the data into training and testing sets
+trainData4 <- subset4[trainIndex4, ]
+testData4 <- subset4[-trainIndex4, ]
+
+# Check and retain only those variables that exist in 'trainData4'
+existing_predictor_variables_4 <- top_predictor_variables_4[top_predictor_variables_4 %in% names(trainData4)]
+
+# Reconstruct the formula with only existing variables
+formula4 <- as.formula(paste("Product.issue.consequence1 ~", paste(existing_predictor_variables_4, collapse = " + ")))
+
+# Now fit the LDA model with the updated formula
+lda.fit4 <- lda(formula4, data = trainData4)
+
+# Predict using the LDA model on the testing set
+lda.pred4 <- predict(lda.fit4, testData4)
+
+# Extracting the predicted classes
+lda.class4 <- lda.pred4$class
+
+# Converting actual and predicted classes to factor if they are not already
+actual_classes4 <- factor(testData4$Product.issue.consequence)
+predicted_classes4 <- factor(lda.class4, levels = levels(actual_classes4))
+conf_matrix44 <- confusionMatrix(predicted_classes4, actual_classes4)
+
+# Printing the detailed confusion matrix
+print(conf_matrix44)
+
+# Calculating and plotting ROC curve and AUC
+
+prob_positive4 <- lda.pred4$posterior[,2] # Adjust based on your class labels
+
+# Calculating ROC and AUC
+roc_obj44 <- roc(response = actual_classes4, predictor = prob_positive4)
+auc_obj44 <- auc(roc_obj4)
+
+# Plotting ROC Curve for the fourth LDA model
+plot(roc_obj44, main = "ROC Curve for LDA Model 4")
+text(0.6, 0.2, paste("AUC Model 4 =", round(auc_obj44, 4)))
+
+```
+# Comaprision of Logistic and LDA 
+## Comaprision of Logistic and LDA of Subset1
+
+Upon critical evaluation of both Logistic Regression and Linear Discriminant Analysis (LDA) in terms of performance metrics, interpretability, and model assumptions, Logistic Regression is recommended as the preferable model for most practical applications. Its edge lies in superior interpretability, offering clear insights into the impact of predictors on the outcome, and greater flexibility due to less stringent assumptions about data distribution. Despite the minimal differences in sensitivity, specificity, accuracy, and AUC between the two models, the practical benefits of Logistic Regression, including its robustness across diverse datasets and its straightforward interpretability, make it a more versatile and universally suitable choice. This model's adaptability to various data conditions without the need for stringent data assumptions ensures its broader applicability and effectiveness in real-world scenarios, making it the recommended choice for predictive modeling tasks where clarity and reliability are paramount.
+
+```{r "Comaprision Subset - 1" , echo=FALSE, include= TRUE}
+# Adjusted metric calculations for binary outcomes
+calc_metrics_from_conf_matrix <- function(conf_matrix) {
+  sensitivity <- conf_matrix[2, 2] / (conf_matrix[2, 2] + conf_matrix[2, 1]) # TP / (TP + FN)
+  specificity <- conf_matrix[1, 1] / (conf_matrix[1, 1] + conf_matrix[1, 2]) # TN / (TN + FP)
+  accuracy <- (conf_matrix[1, 1] + conf_matrix[2, 2]) / sum(conf_matrix)      # (TP + TN) / Total
+  return(c(Sensitivity = sensitivity, Specificity = specificity, Accuracy = accuracy))
+}
+conf_matrix1 <- as.matrix(conf_matrix1)
+conf_matrix11 <- as.matrix(conf_matrix11)
+metrics_logistic <- calc_metrics_from_conf_matrix(conf_matrix1)
+metrics_lda <- calc_metrics_from_conf_matrix(conf_matrix11)
+
+# Add AUC to metrics
+metrics_logistic <- c(metrics_logistic, AUC = auc_obj1)
+metrics_lda <- c(metrics_lda, AUC = auc_obj11)
+
+# Combine into a data frame for comparison
+comparison_table <- rbind(Logistic_Regression = metrics_logistic, LDA = metrics_lda)
+
+library(pROC)
+
+# Plotting the ROC curves together for comparison
+plot(roc_obj1, col="red", main="ROC Curves Comparison", print.auc=TRUE, print.auc.y=0.4)
+plot(roc_obj11, col="blue", add=TRUE, print.auc=TRUE, print.auc.y=0.3)
+legend("bottomright", legend=c(sprintf("Logistic Regression (AUC = %.2f)", auc_obj1), 
+                               sprintf("LDA (AUC = %.2f)", auc_obj11)),
+       col=c("red", "blue"), lwd=2)
+# Using the previous comparison_df data frame
+comparison_df <- data.frame(
+  Metric = c("Sensitivity", "Specificity", "Accuracy", "AUC"),
+  Logistic_Regression = c(metrics_logistic["Sensitivity"], metrics_logistic["Specificity"],
+                          metrics_logistic["Accuracy"], metrics_logistic["AUC"]),
+  LDA = c(metrics_lda["Sensitivity"], metrics_lda["Specificity"],
+          metrics_lda["Accuracy"], metrics_lda["AUC"])
+)
+
+# Generating the table
+kable_styled <- kable(comparison_df, caption = "Performance Comparison: Logistic Regression vs LDA",
+                      format = "html", col.names = c("Metric", "Logistic Regression", "LDA")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F) %>%
+  column_spec(1, bold = TRUE, color = "white", background = "#6C8EBF") %>%
+  column_spec(2, background = "#BBD642") %>%
+  column_spec(3, background = "#D6B656") %>%
+  row_spec(0, background = "#4D648D", color = "white", font_size = 14, bold = TRUE)
+
+
+# Printing the table
+kable_styled
+```
+
+## Comaprision of LOgistic and LDA of Subset2
+
+Considering the performance comparison between Logistic Regression and Linear Discriminant Analysis (LDA)---where they have shown equivalent sensitivity, specificity, and accuracy, and only a negligible difference in AUC---it is recommended to choose Logistic Regression for most practical applications. This recommendation is rooted in Logistic Regression's superior interpretability, which allows stakeholders to readily understand the influence of each predictor variable, and its robustness, given its fewer assumptions regarding the underlying data distribution. Furthermore, the negligible AUC advantage of LDA (0.8413 vs. 0.8387) does not outweigh the practical benefits that Logistic Regression offers, particularly its consistency across varied datasets and situations. Hence, Logistic Regression is favored for its comprehensibility and reliability, making it a pragmatic choice for decision-makers seeking a balance between performance and usability.
+
+```{r "Comaprision Subset - 2" , echo=FALSE, include= TRUE}
+# Adjusted metric calculations for binary outcomes
+calc_metrics_from_conf_matrix <- function(conf_matrix) {
+  sensitivity <- conf_matrix[2, 2] / (conf_matrix[2, 2] + conf_matrix[2, 1]) # TP / (TP + FN)
+  specificity <- conf_matrix[1, 1] / (conf_matrix[1, 1] + conf_matrix[1, 2]) # TN / (TN + FP)
+  accuracy <- (conf_matrix[1, 1] + conf_matrix[2, 2]) / sum(conf_matrix)      # (TP + TN) / Total
+  return(c(Sensitivity = sensitivity, Specificity = specificity, Accuracy = accuracy))
+}
+conf_matrix2 <- as.matrix(conf_matrix2)
+conf_matrix22 <- as.matrix(conf_matrix22)
+metrics_logistic <- calc_metrics_from_conf_matrix(conf_matrix2)
+metrics_lda <- calc_metrics_from_conf_matrix(conf_matrix22)
+
+# Add AUC to metrics
+metrics_logistic <- c(metrics_logistic, AUC = auc_obj2)
+metrics_lda <- c(metrics_lda, AUC = auc_obj22)
+
+# Combine into a data frame for comparison
+comparison_table <- rbind(Logistic_Regression = metrics_logistic, LDA = metrics_lda)
+
+library(pROC)
+
+# Plotting the ROC curves together for comparison
+plot(roc_obj2, col="red", main="ROC Curves Comparison", print.auc=TRUE, print.auc.y=0.4)
+plot(roc_obj22, col="blue", add=TRUE, print.auc=TRUE, print.auc.y=0.3)
+legend("bottomright", legend=c(sprintf("Logistic Regression (AUC = %.2f)", auc_obj2), 
+                               sprintf("LDA (AUC = %.2f)", auc_obj22)),
+       col=c("red", "blue"), lwd=2)
+# Using the previous comparison_df data frame
+comparison_df <- data.frame(
+  Metric = c("Sensitivity", "Specificity", "Accuracy", "AUC"),
+  Logistic_Regression = c(metrics_logistic["Sensitivity"], metrics_logistic["Specificity"],
+                          metrics_logistic["Accuracy"], metrics_logistic["AUC"]),
+  LDA = c(metrics_lda["Sensitivity"], metrics_lda["Specificity"],
+          metrics_lda["Accuracy"], metrics_lda["AUC"])
+)
+
+# Generating the table
+kable_styled <- kable(comparison_df, caption = "Performance Comparison: Logistic Regression vs LDA",
+                      format = "html", col.names = c("Metric", "Logistic Regression", "LDA")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F) %>%
+  column_spec(1, bold = TRUE, color = "white", background = "#6C8EBF") %>%
+  column_spec(2, background = "#BBD642") %>%
+  column_spec(3, background = "#D6B656") %>%
+  row_spec(0, background = "#4D648D", color = "white", font_size = 14, bold = TRUE)
+
+
+# Printing the table
+kable_styled
+```
+
+## Comaprision of LOgistic and LDA of Subset3
+
+Upon examining the provided metrics and ROC curves for Logistic Regression and Linear Discriminant Analysis (LDA), it's evident that Logistic Regression is the stronger model for the dataset in question. With higher values in specificity (0.6842 vs. 0.6654), accuracy (0.7780 vs. 0.7706), and AUC (0.8257 vs. 0.8177), Logistic Regression not only provides better overall performance but also greater reliability in predicting true negatives---a critical factor in many practical applications. The marginally lower sensitivity of Logistic Regression compared to LDA (0.8266 vs. 0.8290) is overshadowed by its superior performance in other key areas. Moreover, Logistic Regression's interpretability is a significant advantage, offering clear insights into how predictor variables affect the outcome. This, combined with its less restrictive assumptions on data distribution, enhances its applicability to a wider range of data scenarios. Therefore, based on the evidence and the importance of model robustness and clarity, Logistic Regression is strongly recommended as the better choice for this dataset.
+
+```{r "Comaprision Subset - 3" , echo=FALSE, include= TRUE}
+# Adjusted metric calculations for binary outcomes
+calc_metrics_from_conf_matrix <- function(conf_matrix) {
+  sensitivity <- conf_matrix[2, 2] / (conf_matrix[2, 2] + conf_matrix[2, 1]) # TP / (TP + FN)
+  specificity <- conf_matrix[1, 1] / (conf_matrix[1, 1] + conf_matrix[1, 2]) # TN / (TN + FP)
+  accuracy <- (conf_matrix[1, 1] + conf_matrix[2, 2]) / sum(conf_matrix)      # (TP + TN) / Total
+  return(c(Sensitivity = sensitivity, Specificity = specificity, Accuracy = accuracy))
+}
+conf_matrix3 <- as.matrix(conf_matrix3)
+conf_matrix33 <- as.matrix(conf_matrix33)
+metrics_logistic <- calc_metrics_from_conf_matrix(conf_matrix3)
+metrics_lda <- calc_metrics_from_conf_matrix(conf_matrix33)
+
+# Add AUC to metrics
+metrics_logistic <- c(metrics_logistic, AUC = auc_obj3)
+metrics_lda <- c(metrics_lda, AUC = auc_obj33)
+
+# Combine into a data frame for comparison
+comparison_table <- rbind(Logistic_Regression = metrics_logistic, LDA = metrics_lda)
+
+library(pROC)
+
+# Plotting the ROC curves together for comparison
+plot(roc_obj3, col="red", main="ROC Curves Comparison", print.auc=TRUE, print.auc.y=0.4)
+plot(roc_obj33, col="blue", add=TRUE, print.auc=TRUE, print.auc.y=0.3)
+legend("bottomright", legend=c(sprintf("Logistic Regression (AUC = %.2f)", auc_obj3), 
+                               sprintf("LDA (AUC = %.2f)", auc_obj33)),
+       col=c("red", "blue"), lwd=2)
+# Using the previous comparison_df data frame
+comparison_df <- data.frame(
+  Metric = c("Sensitivity", "Specificity", "Accuracy", "AUC"),
+  Logistic_Regression = c(metrics_logistic["Sensitivity"], metrics_logistic["Specificity"],
+                          metrics_logistic["Accuracy"], metrics_logistic["AUC"]),
+  LDA = c(metrics_lda["Sensitivity"], metrics_lda["Specificity"],
+          metrics_lda["Accuracy"], metrics_lda["AUC"])
+)
+
+# Generating the table
+kable_styled <- kable(comparison_df, caption = "Performance Comparison: Logistic Regression vs LDA",
+                      format = "html", col.names = c("Metric", "Logistic Regression", "LDA")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F) %>%
+  column_spec(1, bold = TRUE, color = "white", background = "#6C8EBF") %>%
+  column_spec(2, background = "#BBD642") %>%
+  column_spec(3, background = "#D6B656") %>%
+  row_spec(0, background = "#4D648D", color = "white", font_size = 14, bold = TRUE)
+
+
+# Printing the table
+kable_styled
+```
+
+## Comaprision of LOgistic and LDA of Subset4
+
+In making a critical decision between Logistic Regression and Linear Discriminant Analysis (LDA) for the given dataset, where both models present identical AUC and almost equivalent specificity, but LDA slightly edges out in sensitivity and accuracy, a thorough consideration extends beyond these marginal differences. Logistic Regression, with its inherent interpretability and flexibility in handling non-normally distributed data and differing group variances, offers significant practical advantages. It facilitates a clearer understanding of the impact of each variable and ensures robustness across a broader range of data scenarios, which is invaluable in real-world settings where model transparency and reliability are critical. Therefore, despite the small numerical superiority of LDA in certain metrics, Logistic Regression is recommended for its overarching benefits in interpretability and general applicability, rendering it the more pragmatic and insightful choice for predictive analytics tasks.
+
+```{r "Comaprision Subset - 4" , echo=FALSE, include= TRUE}
+# Adjusted metric calculations for binary outcomes
+calc_metrics_from_conf_matrix <- function(conf_matrix) {
+  sensitivity <- conf_matrix[2, 2] / (conf_matrix[2, 2] + conf_matrix[2, 1]) # TP / (TP + FN)
+  specificity <- conf_matrix[1, 1] / (conf_matrix[1, 1] + conf_matrix[1, 2]) # TN / (TN + FP)
+  accuracy <- (conf_matrix[1, 1] + conf_matrix[2, 2]) / sum(conf_matrix)      # (TP + TN) / Total
+  return(c(Sensitivity = sensitivity, Specificity = specificity, Accuracy = accuracy))
+}
+conf_matrix4<- as.matrix(conf_matrix4)
+conf_matrix44 <- as.matrix(conf_matrix44)
+metrics_logistic <- calc_metrics_from_conf_matrix(conf_matrix4)
+metrics_lda <- calc_metrics_from_conf_matrix(conf_matrix44)
+
+# Add AUC to metrics
+metrics_logistic <- c(metrics_logistic, AUC = auc_obj4)
+metrics_lda <- c(metrics_lda, AUC = auc_obj44)
+
+# Combine into a data frame for comparison
+comparison_table <- rbind(Logistic_Regression = metrics_logistic, LDA = metrics_lda)
+
+library(pROC)
+
+# Plotting the ROC curves together for comparison
+plot(roc_obj4, col="red", main="ROC Curves Comparison", print.auc=TRUE, print.auc.y=0.4)
+plot(roc_obj44, col="blue", add=TRUE, print.auc=TRUE, print.auc.y=0.3)
+legend("bottomright", legend=c(sprintf("Logistic Regression (AUC = %.2f)", auc_obj4), 
+                               sprintf("LDA (AUC = %.2f)", auc_obj44)),
+       col=c("red", "blue"), lwd=2)
+# Using the previous comparison_df data frame
+comparison_df <- data.frame(
+  Metric = c("Sensitivity", "Specificity", "Accuracy", "AUC"),
+  Logistic_Regression = c(metrics_logistic["Sensitivity"], metrics_logistic["Specificity"],
+                          metrics_logistic["Accuracy"], metrics_logistic["AUC"]),
+  LDA = c(metrics_lda["Sensitivity"], metrics_lda["Specificity"],
+          metrics_lda["Accuracy"], metrics_lda["AUC"])
+)
+
+# Generating the table
+kable_styled <- kable(comparison_df, caption = "Performance Comparison: Logistic Regression vs LDA",
+                      format = "html", col.names = c("Metric", "Logistic Regression", "LDA")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F) %>%
+  column_spec(1, bold = TRUE, color = "white", background = "#6C8EBF") %>%
+  column_spec(2, background = "#BBD642") %>%
+  column_spec(3, background = "#D6B656") %>%
+  row_spec(0, background = "#4D648D", color = "white", font_size = 14, bold = TRUE)
+
+
+# Printing the table
+kable_styled
+```
+
+## Conclusion
+
+Upon careful evaluation of the performance metrics across various subsets, it is evident that Logistic Regression consistently provides either superior or equivalent accuracy, sensitivity, specificity, and AUC values when compared to Linear Discriminant Analysis (LDA). This pattern of robust performance, demonstrated across multiple subsets, strongly indicates that Logistic Regression not only maintains a stable level of predictive power but also offers advantages in terms of interpretability and less stringent assumptions regarding the underlying data distribution. Given its proven track record across these diverse data slices, it is logical to conclude that Logistic Regression is well-suited for predicting outcomes on the full dataset. The model's ability to generalize across different subsets while providing clear, interpretable results, positions Logistic Regression as the preferable method for this predictive task. Therefore, it is recommended that Logistic Regression be adopted for the analysis of the entire dataset, ensuring a balance of high predictive performance and meaningful insights into the data.
+
+# Appendices
+
+## Appendix ( Additional Visualizations)
+
+# Additional Visualization - 1
+
+## Distribution of Reporter Job Codes
+
+```{r "Additional Visualization - 1" , echo=FALSE, include= TRUE}
+total_counts <- sum(dfD$n)
+threshold <- total_counts * 0.05  # Labels slices that are at least 5% of the total
+dfD %>%
+  count(reporter_job_code) %>%
+  mutate(label = if_else(n > threshold, as.character(reporter_job_code), NA_character_)) %>%
+  ggplot(aes(x = "", y = n, fill = factor(reporter_job_code))) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y") +
+  geom_label(aes(label = label), position = position_stack(vjust = 0.5), show.legend = FALSE) +
+  scale_fill_brewer(palette = "Set3") +
+  labs(title = "Distribution of Reporter Job Codes",
+       x = "",
+       y = "",
+       fill = "Reporter Job Code") +
+  theme_void()
+
+```
+
+# Additional Visualization - 2
+
+##Distribution of Reporter Job Codes by Source Type
+
+```{r "Additional Visualization - 2" , echo=FALSE, include= TRUE}
+
+dfD %>% 
+  count(source_type, reporter_job_code) %>%
+  ggplot(aes(x = source_type, y = n, fill = reporter_job_code)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Distribution of Reporter Job Codes by Source Type",
+       x = "Source Type",
+       y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Additional Visualization - 3
+
+## Trend of legal announcements overtime
+
+```{r "Additional Visualization - 3" , echo=FALSE, include= TRUE}
+df0 %>%
+  group_by(date_event) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = date_event, y = count, group = 1)) +
+  geom_area(alpha = 0.7, fill = "orange") +  # Adjusting transparency and changing fill color
+  labs(title = "Trend of Legal Announcements Over Time",
+       x = "Date",
+       y = "Count of Legal Announcements") +
+  theme_minimal() +  # Using a minimal theme for a clean look
+  theme(plot.title = element_text(size = 20, face = "bold", color = "darkgreen"),  # Adjusting title appearance
+        axis.title = element_text(size = 14, color = "blue"),  # Adjusting axis label appearance
+        axis.text = element_text(size = 12, color = "purple"),  # Adjusting axis text appearance
+        panel.grid.major = element_line(color = "gray", linetype = "dashed"),  # Adding dashed grid lines
+        panel.grid.minor = element_blank(),  # Removing minor grid lines
+        panel.background = element_rect(fill = "lightblue"))  # Changing panel background color
+```
+
+# Additional Visualization - 4
+
+## Density of Product Quantities by Consequence Category
+
+```{r "Additional Visualization - 4" , echo=FALSE, include= TRUE}
+
+ggplot(df0, aes(x = log1p(last_year_product_quantity_average_average), fill = Proudct.issue.consequence)) +
+  geom_density(alpha = 0.5) +
+  scale_x_continuous(labels = scales::comma) +
+  labs(title = "Density of Product Quantities by Consequence Category",
+       x = "Log(Product Quantity)",
+       y = "Density") +
+  theme_minimal()
+
+```
+
+# Additional Visualization - 5
+
+## Prodcut Issue Type
+
+```{r "Additional Visualization - 5" , echo=FALSE, include= TRUE}
+# Create counted_df with issue counts by state
+counted_df <- dfD %>%
+  count(product.manufacturer_state, product.issue.type) %>%
+  mutate(product.manufacturer_state = factor(product.manufacturer_state),
+         product.issue.type = factor(product.issue.type))
+
+# Identify the top 10 issue types based on their total count
+top_issues <- counted_df %>%
+  group_by(product.issue.type) %>%
+  summarize(total = sum(n), .groups = 'drop') %>%  # Make sure to drop groups after summarizing
+  top_n(10, total) %>%
+  pull(product.issue.type)
+
+# Filter the data for only the top issue types
+filtered_counted_df <- counted_df %>%
+  filter(product.issue.type %in% top_issues)
+
+ggplot(filtered_counted_df, aes(x = product.manufacturer_state, y = product.issue.type, fill = n)) +
+  geom_tile(color = "white", linewidth = 0.2) +  # Using linewidth instead of size
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +  # Using gradient fill colors
+  labs(title = "Heatmap of Issue Types by State",
+       x = "State",
+       y = "Issue Type") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, color = "darkgreen"),  # Rotate x-axis labels and change color
+        axis.text.y = element_text(color = "darkblue"),  # Change color of y-axis labels
+        axis.title = element_text(color = "darkred"),  # Change color of axis titles
+        plot.title = element_text(size = 20, face = "bold", color = "darkorange"),  # Adjust title appearance
+        panel.grid.major = element_blank(),  # Remove major grid lines
+        panel.grid.minor = element_blank(),  # Remove minor grid lines
+        panel.background = element_rect(fill = "lightyellow"))  
+```
+
+# Additional Visualization - 6
+
+## Correlation Heatmap based on the last_year
+
+```{r  "Additional Visualization - 6" , echo=FALSE, include= TRUE}
+numeric_vars <- sapply(data, is.numeric)
+numeric_data <- data[, numeric_vars]
+correlation_last_year <- cor(numeric_data[, grep("last_year_", names(numeric_data))])
+correlation_last_two_years <- cor(numeric_data[, grep("last_two_years_", names(numeric_data))])
+correlation_last_three_years <- cor(numeric_data[, grep("last_three_years_", names(numeric_data))])
+correlation_last_four_years <- cor(numeric_data[, grep("last_four_years_", names(numeric_data))])
+melted_last_year <- melt(correlation_last_year)
+melted_last_two_years <- melt(correlation_last_two_years)
+melted_last_three_years <- melt(correlation_last_three_years)
+melted_last_four_years <- melt(correlation_last_four_years)
+# Define a custom cheerful and colorful gradient
+cheerful_gradient <- function(n) {
+  rev(heat.colors(n)) # Using the built-in heat.colors palette in reverse for a unique gradient
+}
+
+# Create subplots for each correlation matrix
+ggplot(melted_last_year, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = cheerful_gradient(10)) + # Using the custom gradient
+  labs(title = "Last Year") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(melted_last_two_years, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = cheerful_gradient(10)) + # Using the custom gradient
+  labs(title = "Last Two Years") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(melted_last_four_years, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = cheerful_gradient(10)) + # Using the custom gradient
+  labs(title = "Last Four Years") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
