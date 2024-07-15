@@ -1,6 +1,6 @@
 ---
-title: "MGT7179 Assignment Report"
-author: "SURIYA SUBBIAH PERUMAL (40423910)"
+title: "Strategic Insights through Advanced Data Analysis Enhancing Business Performance with Statistical Modeling and Machine Learning Techniques"
+author: "SURIYA SUBBIAH PERUMAL "
 date: "06/05/2024"
 output: html_document
 params:
