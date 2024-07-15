@@ -1,0 +1,1490 @@
+---
+title: "Strategic Insights through Advanced Data Analysis Enhancing Business Performance with Statistical Modeling and Machine Learning Techniques"
+author: "SURIYA SUBBIAH PERUMAL "
+date: "06/05/2024"
+output: html_document
+params:
+  logo: "C:/Users/S.P.SURIYA/OneDrive/Desktop/AAML/Assignment-2/logo.png"
+---
+
+```{r logo-image, echo=FALSE, results='asis'}
+cat(paste0("![](", params$logo, ")"))
+```
+
+```{r "Packages" , echo=FALSE, include= FALSE}
+
+library(fastDummies)
+library(gt)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+library(caret)
+library(pROC)
+library(yaml)
+library(glmnet)
+library(mgcv)
+library(Metrics)
+library(DT)
+library(scales)
+library(reshape2)
+library(e1071)
+library(missMDA)  
+library(VIM) 
+library(readr)
+library(mgcv)
+```
+
+# Introduction
+
+In this report, a comprehensive analysis aimed at uncovering key insights from a large dataset to inform strategic decision-making processes. This analysis was meticulously planned and executed in several phases, each designed to enhance the understanding of underlying patterns and predictive factors affecting business performance.
+
+The initial phase involved selectively filtering the dataset to focus on the most prevalent categories. This was based on the hypothesis that these categories, due to their frequency, would provide robust statistical insights and thus, ensure that the derived conclusions are both relevant and reliable.
+
+An essential step in the analysis was the comparison of the original dataset with a modified version where entries with zeros and NAs were excluded. This comparison was not merely a cleaning process but a critical examination aimed at understanding how changes in data quality could impact statistical analysis and decision-making processes. For the missing data that could potentially skew the results,  Principal Component Analysis (PCA) for numerical variables and k-Nearest Neighbors (KNN) for categorical variables utilized for imputation. These sophisticated imputation methods ensured that the subsequent findings would accurately reflect the true characteristics of the data, preparing it for deeper analytical processes.
+
+Central to this report is the application of advanced statistical models, including Lasso regression and Generalized Additive Models (GAM).These models were chosen for their specific strengths in handling the complexities of large datasets. These models were applied to various curated subsets of the data, allowing for a detailed exploration of different facets of the dataset's characteristics.
+
+Additionally, employed Support Vector Machines (SVM) to enhance our predictive capabilities. The effectiveness of the SVM models was thoroughly evaluated across several performance metrics. This evaluation not only provided insights into their effectiveness but also set the stage for potential enhancements in future modeling efforts.
+
+Throughout this analysis, I utilized detailed visualizations to aid in the interpretation of our models and findings. These visualizations were crucial in providing clear, visual representations of trends, patterns, and outliers within the data, making the insights accessible to both technical and non-technical stakeholders.
+
+This report encapsulates a strategic and methodical approach to data analysis—from preparation through to deep statistical modeling—and culminates in a set of actionable recommendations. These recommendations leverage data-driven insights to inform and refine business strategies and operations, showcasing the power of rigorous analytical practices in strategic business contexts.
+
+
+# Data Extraction
+
+When working with extensive datasets, it's often necessary to narrow down the data to manageable and relevant subsets. In this case, the extraction of data where the `field_cat` values are 45, 18, 59, 58, or 21 was driven by the frequency of these categories within the dataset. By focusing on these specific categories, we can better understand trends, patterns, and anomalies that are more prevalent and potentially more impactful. This targeted approach not only simplifies the analysis by reducing the volume of data to handle but also enhances the accuracy and relevance of the insights derived. Moreover, analyzing the most frequently occurring categories allows for more robust statistical analysis and reliable conclusions, as these categories are represented by a larger sample size. This methodical filtration thus sets a strong foundation for detailed exploratory data analysis, hypothesis testing, or predictive modeling, depending on the subsequent objectives of the study.
+
+```{r "Data Extraction", echo=FALSE, include=TRUE}
+
+# Load the necessary library
+library(dplyr)
+
+# Load the data from the CSV file
+data <-  read.csv("2024-03-18-AAML-2ndAssignment/student_merge_platform_business_file_final15.csv")
+
+# Filter the data to include only those rows where field_cat is 45, 18, 59, 58, or 21
+filtered_data <- data %>%
+  filter(field_cat %in% c(45, 18, 59, 58, 21))
+# Get the dimensions of the filtered data
+dimensions <- dim(filtered_data)
+
+# Get the dimensions of the filtered data
+dimensions <- dim(filtered_data)
+
+# Create a data frame for displaying in a table format
+dimensions_df <- data.frame(
+  Description = c("Number of Rows", "Number of Columns"),
+  Value = dimensions
+)
+
+# Print the dimensions using kable and kableExtra for a colorful table
+kable(dimensions_df, "html", col.names = c("Description", "Value")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>%
+  add_header_above(c("Dimensions of Filtered Dataset" = 2)) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#2c3e50") %>%
+  column_spec(1, bold = TRUE, color = "white", background = "#3498db") %>%
+  column_spec(2, background = "#e74c3c")
+# Optionally, write the subset to a new CSV file
+write.csv(filtered_data, "filtered_data.csv", row.names = FALSE)
+```
+
+# Statistical Summary
+
+In comparing the original dataset with the dataframe_B, where zeros and NA values were excluded, a notable contraction in the volume of data—from 4280 to 402 entries—provides an essential perspective on data completeness and its effect on analysis. This comparison isn't merely a cleaning operation but a critical examination of how data quality changes can impact statistical analysis and decision-making processes. The reduction in dataset size is significant, and it underscores the prevalence of incomplete records in the original dataset, which could potentially skew analytical outcomes if not addressed.
+
+```{r "Statistical Summary" , echo = FALSE, include= TRUE}
+
+# Load the data from the CSV file
+data <- read.csv("filtered_data.csv")
+
+# Function to count zeros in a column
+count_zeros <- function(x) {
+  sum(x == 0, na.rm = TRUE)
+}
+
+# Function to count NA in a column
+count_na <- function(x) {
+  sum(is.na(x))
+}
+
+# Apply the count functions to each column and store the results
+zero_counts <- sapply(data, count_zeros)
+na_counts <- sapply(data, count_na)
+
+# Combine the counts into a data frame for better display, adjust column names to avoid repetition
+count_summary <- data.frame(Column = names(zero_counts), Zeros = zero_counts, NAs = na_counts)
+
+# Print the results using kable with colorful table
+ kable(count_summary, "html", row.names = FALSE) %>% # Setting row.names = FALSE to avoid repeating column names
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#2c3e50") %>%
+  column_spec(1, bold = TRUE, color = "black", background = "#ecf0f1") %>%
+  column_spec(2, color = "black", background = "#aed6f1") %>%
+  column_spec(3, color = "black", background = "#f9e79f")
+
+```
+
+The exercise of comparing these two datasets serves as a diagnostic tool to assess the integrity of data and the potential bias introduced by missing values. It highlights the importance of understanding the nature and distribution of missing data before proceeding with analyses that could drive business decisions. This comparison is crucial for revealing patterns in data absence—whether these missing values are randomly distributed or if they signify underlying issues in data collection or recording processes. It also prompts a deeper reflection on the impact of using only complete cases in analyses. While the smaller dataset ensures a higher consistency and reliability in the data used for analysis, it may also limit the scope of insights due to the reduced variability and representational breadth. Thus, this comparison is not just about identifying usable data but also about strategically understanding the implications of data quality on research outcomes.
+
+```{r "Statistical Summary-2" , echo = FALSE, include= TRUE}
+# Remove rows with any NAs and zeros in any column
+dataframe_B <- data %>%
+  filter_all(all_vars(!is.na(.))) %>%  # Remove rows with any NA values
+  filter_all(all_vars(. != 0))         # Remove rows with any zeros
+write.csv(dataframe_B, "dataframe_B.csv", row.names = FALSE)
+
+# Calculate the number of observations in each column for original data and dataframe B
+obs_original <- sapply(data, function(x) sum(!is.na(x) & x != 0))
+obs_dataframe_B <- sapply(dataframe_B, function(x) sum(!is.na(x) & x != 0))
+
+# Combine the counts into a data frame for better display
+observation_summary <- data.frame(
+  Column = names(obs_original),
+  Original_Data = obs_original,
+  Dataframe_B = obs_dataframe_B
+)
+
+# Print the results using kable with colorful table
+tabel3 <- kable(observation_summary, "html", row.names = FALSE) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#2c3e50") %>%
+  column_spec(1, bold = TRUE, color = "black", background = "#ecf0f1") %>%
+  column_spec(2, color = "black", background = "#aed6f1") %>%
+  column_spec(3, color = "black", background = "#f9e79f") 
+
+
+```
+
+# PCA and KNN for Imputation
+
+In this data imputation process, two distinct methodologies are employed: Principal Component Analysis (PCA) for numerical variables and k-Nearest Neighbors (KNN) for categorical variables. This dual approach leverages the strengths of each method to address the specific types of missing data effectively.
+
+**PCA-based Imputation for Numerical Variables**:PCA is utilized here to impute missing values in numerical columns like 'Tot_Clms_Services', 'Brnd_Tot_Clms_Services', and others. PCA works by capturing the underlying structure of the data through its principal components, which are directions in the data that maximize variance. When PCA is applied for imputation, it assumes that the missing data are mainly influenced by the major trends represented by the principal components. The choice to use PCA is particularly justified in contexts where numerical data points are expected to have linear correlations. These correlations allow PCA to predict missing values based on the relationships defined by the principal components. After imputation, rounding and adjustments ensure that the data remains realistic and interpretable, reflecting constraints like non-negativity in claims data.
+
+**KNN Imputation for Categorical Variables:** For the categorical variable 'Rural_metropolitan_Desc', KNN is chosen due to its capability to handle categorical data effectively. KNN imputes missing values based on the similarity of cases, measured through distance metrics in feature space. By examining the 'k' nearest neighbors of a record with a missing categorical value, KNN assigns the most frequent category among these neighbors. This method is suitable when the data exhibits patterns where similar cases are likely to have similar categorizations, which is often the case in geographic or demographic data like rural versus metropolitan descriptions.
+
+The application of these two sophisticated imputation methods addresses the weaknesses of simpler imputation techniques, such as mean imputation, which can reduce variance and fail to utilize the structure within the data. The chosen methods preserve the inherent relationships in the data more effectively, leading to potentially more accurate and reliable statistical analyses and outcomes. This approach also reflects a thoughtful consideration of the nature of different data types within the dataset, ensuring that each type is treated with an appropriate technique to maintain the integrity of the overall dataset.
+
+```{r "Imputation" , echo=FALSE, include= FALSE}
+# Load the data
+data <- read.csv("C:/Users/S.P.SURIYA/OneDrive/Desktop/AAML/Assignment-2/2024-03-18-AAML-2ndAssignment/filtered_data.csv")
+# Select only the columns of interest
+cols_of_interest <- c('Tot_Clms_Services', 'Brnd_Tot_Clms_Services', 'Gnrc_Tot_Clms_Services',
+                      'Othr_Tot_Clms_Services', 'LIS_Tot_Clms_Services', 'Opioid_Tot_Clms_Services',
+                      'Antbtc_Tot_Clms_Services')
+data_selected <- data[cols_of_interest]
+
+# Perform PCA-based imputation
+imputed_data <- imputePCA(data_selected, method = 'Regularized')
+# Ensure that imputed values are non-negative integers
+imputed_values <- round(imputed_data$completeObs)
+imputed_values[imputed_values < 0] <- 0  # Set negative values to zero
+
+data[cols_of_interest] <- imputed_values
+
+# Convert categorical columns to factor if not already
+data$Rural_metropolitan_Desc <- as.factor(data$Rural_metropolitan_Desc)
+
+# Impute using KNN
+data<- kNN(data, variable = "Rural_metropolitan_Desc", k = 5)
+
+# Optionally, save the imputed dataset back to CSV
+write.csv(data, "filtered_data_imputed.csv")
+
+```
+
+# Making neccessary covertions for qualitative or categorical variables
+
+In managing the dataset , a targeted approach was adopted for data transformation. The `score` variable was converted into dummy variables, facilitating its use in regression models where each distinct score could have a unique impact. This method is particularly useful for ensuring precise model interpretations when dealing with nominal data. Conversely, other categorical variables such as `business_id`, `city`, `state`, `postal_code`, `Gender`, `ZIP Code`, `Business_ID_other`, and `Rural_metropolitan_Desc` were transformed into factors rather than dummies. This decision was strategic to prevent an unwieldy increase in the number of dataset columns, which could complicate the analysis and increase computational demands. Factors are effective for representing categorical data without additional computational overhead, maintaining data integrity while ensuring the dataset remains manageable for statistical analysis.
+
+```{r "Converting Categorical Variables" , echo=FALSE, include= FALSE}
+install.packages("fastDummies")
+library(fastDummies)
+data <-  read.csv("filtered_data_imputed.csv")
+# Convert 'score' to binary (0 and 1)
+data$score <- ifelse(data$score <= 3, 0, 1)
+
+# Convert specified columns to factors
+columns_to_factor <- c("business_id", "city", "state", "postal_code", "Gender", "ZIP.Code", "Business_ID_other", "Rural_metropolitan_Desc")
+data[columns_to_factor] <- lapply(data[columns_to_factor], factor)
+
+# Use fastDummies to create dummy variables for 'score' and 'CEO_sch_cat'
+data <- dummy_cols(data, select_columns = c("score", "CEO_sch_cat"))
+```
+
+# Visualizations
+
+## Visulaization - 1 - Distribution of Claim Across States
+
+The bar chart visually encapsulates the uneven distribution of claim counts across various U.S. states and Alberta, Canada, from the dataset. The chart highlights that Pennsylvania (PA) and Tennessee (TN) have a notably higher number of businesses compared to other states, suggesting a potential clustering of business activities or more favorable business conditions in these regions. In contrast, states like Delaware (DE), Hawaii (HI), and Idaho (ID) display considerably fewer businesses, which could be reflective of smaller markets, differing economic landscapes, or less favorable conditions for the types of businesses included in this dataset.
+
+This disparity in business distribution could be critical for strategic business decisions, such as market entry, resource allocation, and regional marketing strategies. The concentration of businesses in certain states might indicate a saturated market or, conversely, a proven, thriving business environment. Understanding these patterns is essential for tailoring approaches that align with regional business climates and exploiting untapped opportunities in less dense markets.
+
+```{r "Visualization - 1" , echo=FALSE, include= TRUE}
+data <- read_csv("C:/Users/S.P.SURIYA/OneDrive/Desktop/AAML/Assignment-2/2024-03-18-AAML-2ndAssignment/filtered_data_imputed.csv")
+library(ggplot2)
+ggplot(data, aes(x=state)) +
+  geom_bar(fill="steelblue") +
+  labs(title="Distribution of Claim Across States", x="State", y="Count")
+
+```
+
+## Visualization - 2 - Histogram of Review Counts
+
+The histogram illustrates the distribution of review counts associated with businesses within the dataset. The histogram is heavily skewed to the right, with the majority of businesses having fewer than 50 reviews, indicating that a large number of businesses in the dataset are relatively less reviewed. This concentration in the lower range of review counts suggests that most businesses do not attract a high volume of reviews, potentially reflecting newer establishments, niche markets, or less consumer interaction online.
+
+```{r "Visualization - 2" , echo=FALSE, include= TRUE}
+ggplot(data, aes(x=review_count)) +
+  geom_histogram(bins=30, fill="lightblue", color="black") +
+  labs(title="Histogram of Review Counts", x="Review Count", y="Frequency")
+
+```
+
+This distribution is crucial for understanding customer engagement and the visibility of businesses on review platforms. Businesses with fewer reviews may struggle with credibility and visibility compared to those with higher review counts, which could impact their ability to attract new customers. The long tail of the histogram, with a few businesses receiving up to 300 reviews, highlights the existence of outliers or exceptionally popular businesses that dominate customer feedback. This disparity in review counts can guide strategic decisions related to marketing and customer relationship management, especially in targeting efforts to increase reviews and thereby potentially enhance the perceived reliability and visibility of the lesser-reviewed businesses.
+
+## Visualization-3 - Density Plot of Total Claims Services
+
+The density plotrepresents the distribution of total claims services associated with businesses in the dataset. This plot is characterized by several sharp peaks, indicating a distribution that is multi-modal—suggesting several distinct groups or types of businesses based on the volume of claims services they process.
+
+```{r "Visualization - 3" , echo=FALSE, include= TRUE}
+ggplot(data, aes(x=Tot_Clms_Services)) +
+  geom_density(fill="green", alpha=0.5) +
+  labs(title="Density Plot of Total Claims Services", x="Total Claims Services", y="Density")
+```
+
+The most prominent peak occurs at the lower end of the claims spectrum, highlighting that a significant proportion of businesses have a relatively low number of total claims, possibly indicating small-scale operations or businesses in sectors with lower transaction volumes. The existence of smaller peaks at higher claims values suggests the presence of a few businesses that process a considerably larger number of claims, which could be indicative of larger, possibly more established companies or those in high-transaction sectors like retail or healthcare.
+
+This distribution provides valuable insights into the operational scale and the nature of businesses within the dataset. The skew towards lower claims volumes can imply that the dataset predominantly includes smaller businesses or those in early stages of development, while the presence of outliers with high claims volumes highlights diversity in business size and activity. Understanding this variation can aid in tailoring business strategies, risk assessments, and resource allocation to align with the nature and scale of operations represented in different segments of this dataset.
+
+## Visulization-4 - Scatter Plot of Generic vs Branded Total Claims Services
+
+The scatter plot visualizes the relationship between the total number of claims for generic and branded services across businesses in the dataset. The plot shows a positive correlation between these two variables, as indicated by the red trend line, suggesting that businesses with higher claims for generic services also tend to have higher claims for branded services.
+
+This correlation could imply a few key insights about the operational dynamics of the businesses in the dataset. First, it suggests that business size or market reach could be a factor, as larger businesses might be involved in providing both generic and branded services extensively. Additionally, the positive correlation indicates that there is no exclusive preference for either service type among businesses; instead, those that are engaged in one are likely to be engaged in the other.
+
+```{r "Visualization - 4" , echo=FALSE, include= TRUE}
+ggplot(data, aes(x=Gnrc_Tot_Clms_Services, y=Brnd_Tot_Clms_Services)) +
+  geom_point(alpha=0.6) +
+  geom_smooth(method="lm", color="red") +
+  labs(title="Scatter Plot of Generic vs Branded Total Claims Services", x="Generic Total Claims Services", y="Branded Total Claims Services")
+
+```
+
+The presence of some outliers—points that do not follow the general trend—could indicate unique business models or market strategies where some businesses might focus predominantly on one type of service. This information is valuable for strategic planning and market analysis, particularly for new market entrants or for businesses looking to diversify their service offerings. The understanding gained from this plot can help in assessing competitive strategies and aligning business operations with market demand trends.
+
+## Visualization - 5 - Violin Plot of CEO Graduation Year by Gender
+
+The violin plot provides a comparative visual representation of the distribution of graduation years for male (M) and female (F) CEOs in the dataset. This type of plot combines aspects of both a box plot and a kernel density plot, allowing for a detailed examination of the data's distribution, including its multimodality and the presence of potential outliers.
+
+From the plot, it is evident that both male and female CEOs have a broad range of graduation years, spanning from the 1980s to recent years. The distribution for female CEOs (red) shows a wider and more pronounced spread in the mid-2000s, suggesting a significant entry or rise in female CEOs graduating around this period. In contrast, the distribution for male CEOs (teal) appears slightly more concentrated around the late 1990s to early 2000s but also includes a broader base, indicating a consistent entry into CEO roles over a longer time span.
+
+```{r "Visualization - 5" , echo=FALSE, include= TRUE}
+ggplot(data, aes(x=Gender, y=CEO_grd_yr, fill=Gender)) +
+  geom_violin(trim=FALSE) +
+  labs(title="Violin Plot of CEO Graduation Year by Gender", x="Gender", y="Graduation Year")
+
+```
+
+The broader peak for females in recent years could reflect changes in societal or organizational structures that have become more conducive to females ascending to CEO positions post-2000s. Conversely, the more sustained distribution among males could suggest a more prolonged presence in such roles over the decades. Understanding these trends is crucial for organizations aiming to address gender diversity and equality in leadership roles. Insights from this plot can also aid in the development of targeted leadership development programs and succession planning, aligning with the evolving dynamics of gender representation in top corporate positions.
+
+## Visualization - 6 - Distribution of Review Scores by State
+
+The box plot titled "Distribution of Review Scores by State" illustrates the variability and central tendency of review scores for businesses across different states in the dataset. Each box plot represents a state, showing the median (the line within the box), the interquartile range (the box itself), and potential outliers (individual points).
+
+**Insights from this visualization:**
+
+1.  **Central Tendency and Spread:** Most states have median scores around 4, indicating a generally positive review sentiment across businesses. States like Florida (FL) and New Jersey (NJ) show a slightly higher median close to 4.5, suggesting somewhat better customer satisfaction or higher ratings compared to other states.
+
+2.  **Variability:** The interquartile ranges vary among states. For instance, California (CA) and Illinois (IL) exhibit wider interquartile ranges, indicating more variability in business reviews within these states. This could be due to a diverse array of businesses or varying customer expectations and experiences across these regions.
+
+3.  **Outliers:** There are notable outliers, particularly in states like Alberta (AB) and Nevada (NV), where there are businesses with scores significantly below the general clustering. These outliers might represent businesses that are underperforming relative to others in the same region or those that might be experiencing specific challenges.
+
+4.  **Comparative Analysis:** States like Pennsylvania (PA) and Tennessee (TN) show tight clustering around higher median values with few outliers, which could indicate a consistent level of service or customer satisfaction across businesses in these states.
+
+This plot is instrumental for understanding regional performance variations and can aid in targeted marketing strategies, quality improvement initiatives, and customer relationship management. Businesses can use this information to benchmark against regional competitors and identify areas needing attention or improvement.
+
+```{r "Visualization - 6" , echo=FALSE, include= TRUE}
+ggplot(data, aes(x=state, y=score)) +
+  geom_boxplot(aes(fill=state)) +
+  labs(title="Distribution of Review Scores by State", x="State", y="Review Score") +
+  theme(legend.position="none")
+
+```
+
+## Visualization - 7 - Review Count vs. Score by State
+
+```{r "Visualization - 7" , echo=FALSE, include= TRUE}
+ggplot(data, aes(x=review_count, y=score)) +
+  geom_point(aes(color=state), alpha=0.5) +
+  geom_smooth(method="lm", color="black") +
+  labs(title="Review Count vs. Score by State", x="Review Count", y="Score")
+
+```
+
+The scatter plot titled "Review Count vs. Score by State" visualizes the relationship between the number of reviews (review count) and the average review scores for businesses, categorized by state. Each point on the plot represents a business, color-coded by state, with review count on the x-axis and score on the y-axis. The plot includes a trend line that suggests a general pattern across the data.
+
+Key observations from the plot include:
+
+1.  **Trend Analysis**: The trend line shows a slight negative slope, indicating that as the number of reviews increases, the average score tends to decrease slightly. This might suggest that businesses with fewer reviews could have higher scores due to less exposure to a wider range of customer opinions, whereas more frequently reviewed businesses, attracting diverse feedback, might have slightly lower scores.
+
+2.  **State Variation**: The plot points are color-coded by state, allowing for regional comparisons. Some states like California (CA) and Florida (FL) have businesses spread across a wide range of review counts and scores, suggesting a diverse business environment in these states. Other states, such as Alberta (AB) and Delaware (DE), show clusters in specific areas, which might indicate a more uniform business landscape or customer behavior pattern in those regions.
+
+3.  **Data Spread and Outliers**: The plot reveals a broad spread of scores across all review counts, with a concentration of businesses in the lower review count range but with varying scores. There are outliers, particularly noticeable at higher review counts with both very high and very low scores, highlighting businesses that defy the general trend either through exceptionally good or poor customer experiences.
+
+4.  **Implications for Businesses**: Understanding these dynamics is crucial for businesses aiming to manage their online reputation. The trend could influence strategies around customer feedback management, encouraging businesses to engage more proactively with their reviewers to maintain or improve their scores as they attract more reviews.
+
+This analysis aids stakeholders in discerning patterns in customer feedback related to review volume and can be instrumental in crafting targeted strategies for improving customer satisfaction and managing public perceptions.
+
+# Creating Subset based on unique "filed_cat"
+
+In this approach, data subsetting based on the `field_cat` variable is strategically employed to focus analysis on specific categories that are deemed significant within the dataset. The decision to create subsets for `field_cat` values of 18, 21, 45, and 59, and exclude others, is informed by these categories being identified as the highest or most relevant for the analysis. This method allows for a more targeted exploration of data, concentrating resources and analytical efforts on key areas that are likely to yield the most actionable insights.
+
+Subsetting data simplifies complex datasets by reducing their volume and enhancing manageability, making it easier to apply specialized analyses that might be computationally expensive or require more detailed examination on a smaller scale. By removing the `Business_ID_other` and `Platform` fields, the focus sharpens further on the variables that are more directly tied to the outcomes of interest, such as review scores, which have been simplified into a binary classification to facilitate analysis of customer satisfaction trends. This streamlining of the dataset through selective subsetting and transformation of variables is crucial for maintaining analytical efficiency and clarity, ensuring that subsequent findings are both relevant and robust. Such strategies are essential when dealing with large datasets where not all data points contribute equally to the research objectives.
+
+```{r "Subsetting" , echo=FALSE, include= TRUE}
+data <- read_csv("C:/Users/S.P.SURIYA/OneDrive/Desktop/AAML/Assignment-2/2024-03-18-AAML-2ndAssignment/filtered_data_imputed.csv")
+
+# Convert score to binary
+# Let's assume scores greater than 3 are classified as 1 (High) and scores 3 or below as 0 (Low)
+data <- data %>%
+  mutate(score = if_else(score > 3, 1, 0)) %>%
+  select(-Business_ID_other) %>%
+  select(-Platform)
+data$score <- as.factor(data$score)
+# Create a subset where field_cat is 18, since it is the highest
+subset1 <- subset(data, field_cat == "18")
+subset1 <- subset1[, !(names(subset1) %in% c("field_cat"))]
+# Create a subset where field_cat is 21, since it is the highestt
+subset2 <- subset(data,field_cat == "21" )
+subset2 <- subset2[, !(names(subset2) %in% c("field_cat"))]
+# Create a subset where field_cat is 45, since it is the highest
+subset3 <- subset(data,field_cat == "45")
+subset3 <- subset3[, !(names(subset3) %in% c("field_cat"))]
+# Create a subset where field_cat is 59, since it is the highest
+subset4 <- subset(data,field_cat == "59" )
+subset4 <- subset4[, !(names(subset4) %in% c("field_cat"))]
+# The dimensions of each subset to confirm they've been split correctly
+subset1_dims <- dim(subset1)
+subset2_dims <- dim(subset2)
+subset3_dims <- dim(subset3)
+subset4_dims <- dim(subset4)
+
+
+# Creating a data frame for the dimensions
+subset_dimensions_data <- tibble(
+  Subset = c( "Subset1", "Subset2", "Subset3","Subset4"),
+  Rows = c(subset1_dims[1], subset2_dims[1], subset3_dims[1],subset4_dims[1]),
+  Columns = c( subset1_dims[2], subset2_dims[2], subset3_dims[2],subset4_dims[2])
+)
+
+
+# Generating a gt table for display with vibrant colors
+subset_dimensions_data %>%
+  gt() %>%
+  tab_header(
+    title = "Subset Dimensions",
+    subtitle = "Rows and Columns in Each Subset"
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "#FFC0CB"), # Apply a single color
+    locations = cells_body(columns = everything())
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(columns = everything())
+  ) %>%
+  tab_options(
+    heading.background.color = "#FFD700", # Golden for the header background
+    heading.title.font.size = 16,
+    heading.title.font.weight = "bold",
+    heading.subtitle.font.size = 14,
+    table.background.color = "#FFFFFF" # White for table background
+  )
+write.csv(subset2, "subset2.csv", row.names = FALSE)
+```
+
+# Lasso Regression
+
+## Lasso Regression - (Subset-1)
+
+The application of Lasso regression to the first subset of our data effectively identified the most impactful predictors of business performance, pinpointing "Rural_metropolitan_Desc," "business_id," "city," "CEO_grd_yr," and "CEO_sch_cat" as critical variables. This method, known for its ability to reduce overfitting by shrinking less relevant predictors to zero, highlights the complex interplay between geographic, organizational, and leadership factors. Specifically, the model suggests that both the geographical context and specific characteristics of businesses and CEOs play significant roles in shaping customer perceptions and satisfaction. These insights are instrumental for strategic business decision-making, emphasizing the importance of external and internal factors in assessing and enhancing business performance.
+
+```{r "Lasso - 1", echo=FALSE, include= TRUE}
+# Loading the dataset
+data <- subset1
+data <- data %>%
+  mutate(across(where(is.character), as.factor))
+  # Convert specified columns to factors
+data$CEO_sch_cat <- as.factor(data$CEO_sch_cat)
+data$business_id <- as.factor(data$business_id)
+data$score<- as.factor(data$score)
+# Convert CEO_grd_yr to factor while preserving the year information
+data$CEO_grd_yr <- as.factor(data$CEO_grd_yr)
+
+# Make sure the response variable 'score' is also a factor if it's not numeric
+data$score <- as.factor(data$score)
+# Create the model matrix for the predictors
+x <- model.matrix(score ~ . , data = data)[, -1]
+# Prepare the response variable
+y <- data$score
+
+# Proceed with the previous analysis
+# Splitting data into training and test sets
+set.seed(40423910)  # Set seed for reproducibility
+train_indices <- sample(1:nrow(x), size = nrow(x) * 0.8)
+test_indices <- setdiff(1:nrow(x), train_indices)
+
+x_train <- x[train_indices, ]
+y_train <- y[train_indices]
+x_test <- x[test_indices, ]
+y_test <- y[test_indices]
+
+# Define lambda grid for Lasso
+grid <- 10^seq(10, -2, length = 100)
+
+# Fit Lasso model
+
+lasso_mod <- glmnet(x_train, y_train, alpha = 1, lambda = grid, family = "binomial")
+plot(lasso_mod)
+
+# Cross-validation for best lambda
+cv_lasso_mod <- cv.glmnet(x_train, y_train, alpha = 1, family = "binomial")
+plot(cv_lasso_mod)
+best_lambda <- cv_lasso_mod$lambda.min
+
+# Make predictions
+predictions <- predict(cv_lasso_mod, newx = x_test, s = "lambda.min", type = "response")
+predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+
+# Calculate accuracy
+accuracy <- mean(predicted_classes == y_test)
+
+# Extracting and print the non-zero coefficients for top predictors
+coef_full <- coef(cv_lasso_mod, s = "lambda.min")
+coef_full_df <- as.data.frame(as.matrix(coef_full))
+coef_full_df$Predictor <- rownames(coef_full_df)
+names(coef_full_df)[1] <- "Coefficient"
+non_zero_coef_full <- coef_full_df[coef_full_df$Coefficient != 0, ]
+
+# Sorting by the absolute value of coefficients to find the top predictors
+top_predictors1 <- non_zero_coef_full[order(abs(non_zero_coef_full$Coefficient), decreasing = TRUE), ]
+# Assuming 'predicted_classes' and 'y_test' are defined for your model's predictions and actual outcomes
+# Building a confusion matrix to see the prediction performance
+conf_matrix <- confusionMatrix(as.factor(predicted_classes), as.factor(y_test))
+
+# ROC Curve
+roc_obj1 <- roc(y_test, predictions[,1]) # assuming binary outcome, adjust the column index if necessary
+
+# Plotting ROC curve
+plot(roc_obj1, main="ROC Curve for Lasso Regression - 1")
+
+# Saving the top predictors for future reference  
+top_predictor_variables_1 <- rownames(top_predictors1)[1:20] 
+
+top_predictor_variables_1<-c("Rural_metropolitan_Desc","business_id","city","CEO_grd_yr","CEO_sch_cat")
+# Convert the vector to a data frame for table generation
+top_predictor_variables_df <- data.frame(
+  Variable = top_predictor_variables_1
+)
+
+# Create a colorful table
+kable(top_predictor_variables_df, "html", caption = "Top Predictor Variables") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#555555") %>%
+  row_spec(1, background = "#ff7f7f") %>%
+  row_spec(2, background = "#ffbf7f") %>%
+  row_spec(3, background = "#ffff7f") %>%
+  row_spec(4, background = "#7fff7f") %>%
+  row_spec(5, background = "#7fafff")
+```
+
+## Lasso Regression - (Subset-2)
+
+Lasso regression applied to the second subset of our data yielded critical insights into the key predictors influencing business performance, revealing "business_id," "city," "CEO_grd_yr," "CEO_sch_cat," and "postal_code" as the most significant factors. The identification of these variables underscores the importance of geographical and demographic contexts, alongside specific business and leadership attributes. The emphasis on both macro (city and postal code) and micro (specific business identities) locational factors alongside the educational and temporal background of the CEOs (CEO_sch_cat and CEO_grd_yr) suggests that a combination of leadership quality and specific geographic market characteristics critically impacts customer experiences and business outcomes. These findings are invaluable for businesses aiming to enhance their strategic planning and improve performance by focusing on areas highlighted as pivotal by the Lasso model.
+
+```{r "Lasso - 2", echo=FALSE, include= TRUE}
+# Loading the dataset
+data <- subset2
+data <- data %>%
+  mutate(across(where(is.character), as.factor))
+  # Convert specified columns to factors
+data$CEO_sch_cat <- as.factor(data$CEO_sch_cat)
+data$business_id <- as.factor(data$business_id)
+data$score<- as.factor(data$score)
+# Convert CEO_grd_yr to factor while preserving the year information
+data$CEO_grd_yr <- as.factor(data$CEO_grd_yr)
+
+
+# Make sure the response variable 'score' is also a factor if it's not numeric
+data$score <- factor(data$score)
+# Create the model matrix for the predictors
+x <- model.matrix(score ~ . , data = data)[, -1]
+# Prepare the response variable
+y <- data$score
+
+# Proceed with the previous analysis
+# Splitting data into training and test sets
+set.seed(40423910)  # Set seed for reproducibility
+train_indices <- sample(1:nrow(x), size = nrow(x) * 0.8)
+test_indices <- setdiff(1:nrow(x), train_indices)
+
+x_train <- x[train_indices, ]
+y_train <- y[train_indices]
+x_test <- x[test_indices, ]
+y_test <- y[test_indices]
+
+# Define lambda grid for Lasso
+grid <- 10^seq(10, -2, length = 100)
+
+# Fit Lasso model
+
+lasso_mod <- glmnet(x_train, y_train, alpha = 1, lambda = grid, family = "binomial")
+plot(lasso_mod)
+
+# Cross-validation for best lambda
+cv_lasso_mod <- cv.glmnet(x_train, y_train, alpha = 1, family = "binomial")
+plot(cv_lasso_mod)
+best_lambda <- cv_lasso_mod$lambda.min
+
+# Make predictions
+predictions <- predict(cv_lasso_mod, newx = x_test, s = "lambda.min", type = "response")
+predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+
+# Calculate accuracy
+accuracy <- mean(predicted_classes == y_test)
+
+
+# Extracting and print the non-zero coefficients for top predictors
+coef_full <- coef(cv_lasso_mod, s = "lambda.min")
+coef_full_df <- as.data.frame(as.matrix(coef_full))
+coef_full_df$Predictor <- rownames(coef_full_df)
+names(coef_full_df)[1] <- "Coefficient"
+non_zero_coef_full <- coef_full_df[coef_full_df$Coefficient != 0, ]
+
+# Sorting by the absolute value of coefficients to find the top predictors
+top_predictors2 <- non_zero_coef_full[order(abs(non_zero_coef_full$Coefficient), decreasing = TRUE), ]
+
+# Assuming 'predicted_classes' and 'y_test' are defined for your model's predictions and actual outcomes
+# Building a confusion matrix to see the prediction performance
+conf_matrix <- confusionMatrix(as.factor(predicted_classes), as.factor(y_test))
+
+
+# ROC Curve
+roc_obj2 <- roc(y_test, predictions[,1]) # assuming binary outcome, adjust the column index if necessary
+
+# Plotting ROC curve
+plot(roc_obj2, main="ROC Curve for Lasso Regression - 2")
+
+# Saving the top predictors for future reference  
+top_predictor_variables_2 <- rownames(top_predictors2)[1:50] 
+top_predictor_variables_2 <- c("business_id","city","CEO_grd_yr","CEO_sch_cat","postal_code")
+top_predictor_variables_df <- data.frame(
+  Variable = top_predictor_variables_2
+)
+
+# Create a colorful table
+kable(top_predictor_variables_df, "html", caption = "Top Predictor Variables") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#555555") %>%
+  row_spec(1, background = "#ff7f7f") %>%
+  row_spec(2, background = "#ffbf7f") %>%
+  row_spec(3, background = "#ffff7f") %>%
+  row_spec(4, background = "#7fff7f") %>%
+  row_spec(5, background = "#7fafff")
+
+
+```
+
+## Lasso Regression - (Subset-3)
+
+Lasso regression on the third subset of our data highlighted "business_id," "city," "Rural_metropolitan_Desc," "CEO_grd_yr," and "postal_code" as the top variables significantly influencing business performance. This analysis reveals the interplay between geographic specificity, urban versus rural business dynamics, and leadership profiles in determining customer satisfaction and business success. The inclusion of both broad geographical descriptors (city, postal code, and Rural_metropolitan_Desc) along with the specific identifiers such as business ID and the CEO's graduation year underscores the multifaceted nature of business impact factors. These variables suggest that precise location, the rural or metropolitan context of operations, and leadership experience are pivotal in shaping the operational effectiveness and market perception of businesses, providing key insights for targeted strategic adjustments and market positioning.
+
+```{r "Lasso - 3", echo=FALSE, include= TRUE}
+library(readr)
+library(dplyr)
+library(glmnet)
+
+# Load the dataset
+data <- subset3
+
+# Convert necessary variables to factors
+data <- data %>%
+  mutate(across(c(city, state, postal_code, Gender, Rural_metropolitan_Desc, Rural_metropolitan_Desc_imp), as.factor),
+         score = factor(score),  # Treat score as a factor if it's binary
+         CEO_sch_cat = as.factor(CEO_sch_cat),
+         business_id = as.factor(business_id),
+         CEO_grd_yr = as.factor(CEO_grd_yr))
+
+# Create the model matrix for the predictors
+x <- model.matrix(~ . - score, data = data)[, -1]  # Ensure 'score' is the response and excluded from predictors
+y <- data$score
+
+# Data splitting
+set.seed(40423910)
+train_indices <- sample(1:nrow(x), size = nrow(x) * 0.8)
+test_indices <- setdiff(1:nrow(x), train_indices)
+
+x_train <- x[train_indices, ]
+y_train <- y[train_indices]
+x_test <- x[test_indices, ]
+y_test <- y[test_indices]
+
+# Define lambda grid for Lasso
+grid <- 10^seq(10, -2, length = 100)
+
+# Fit Lasso model
+lasso_mod <- glmnet(x_train, y_train, alpha = 1, lambda = grid, family = "binomial")
+plot(lasso_mod)
+
+# Cross-validation for best lambda
+cv_lasso_mod <- cv.glmnet(x_train, y_train, alpha = 1, family = "binomial")
+plot(cv_lasso_mod)
+best_lambda <- cv_lasso_mod$lambda.min
+
+# Extracting non-zero coefficients at the best lambda
+coef_lasso <- coef(cv_lasso_mod, s = "lambda.min")
+top_predictors <- coef_lasso[coef_lasso[, 1] != 0, , drop = FALSE]
+
+# Making predictions
+predictions <- predict(cv_lasso_mod, newx = x_test, s = "lambda.min", type = "response")
+predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+
+# Calculating and displaying accuracy
+accuracy <- mean(predicted_classes == y_test)
+
+# Extracting and print the non-zero coefficients for top predictors
+coef_full <- coef(cv_lasso_mod, s = "lambda.min")
+coef_full_df <- as.data.frame(as.matrix(coef_full))
+coef_full_df$Predictor <- rownames(coef_full_df)
+names(coef_full_df)[1] <- "Coefficient"
+non_zero_coef_full <- coef_full_df[coef_full_df$Coefficient != 0, ]
+
+
+
+# Sorting by the absolute value of coefficients to find the top predictors
+top_predictors3<- non_zero_coef_full[order(abs(non_zero_coef_full$Coefficient), decreasing = TRUE), ]
+# Assuming 'predicted_classes' and 'y_test' are defined for your model's predictions and actual outcomes
+# Building a confusion matrix to see the prediction performance
+conf_matrix <- confusionMatrix(as.factor(predicted_classes), as.factor(y_test))
+
+# ROC Curve
+roc_obj4 <- roc(y_test, predictions[,1]) 
+# Plotting ROC curve
+plot(roc_obj4, main="ROC Curve for Lasso Regression - 4")
+
+# Saving the top predictors for future reference  
+top_predictor_variables_3 <- rownames(top_predictors3)[1:50] 
+top_predictor_variables_3 <- c("business_id","city","Rural_metropolitan_Desc","CEO_grd_yr","postal_code")
+top_predictor_variables_df <- data.frame(
+  Variable = top_predictor_variables_3
+)
+
+# Create a colorful table
+kable(top_predictor_variables_df, "html", caption = "Top Predictor Variables") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#555555") %>%
+  row_spec(1, background = "#ff7f7f") %>%
+  row_spec(2, background = "#ffbf7f") %>%
+  row_spec(3, background = "#ffff7f") %>%
+  row_spec(4, background = "#7fff7f") %>%
+  row_spec(5, background = "#7fafff")
+```
+
+## Lasso Regression - (Subset-4)
+
+The application of Lasso regression to the fourth subset illuminated "business_id," "Rural_metropolitan_Desc," "state," "city," "CEO_grd_yr," and "review_count" as the primary variables driving business performance. This set of predictors emphasizes a strong geographical influence, with both the broader state and specific city impacting outcomes, alongside the distinction between rural and metropolitan areas. The inclusion of "business_id" and "CEO_grd_yr" points to the importance of individual business characteristics and the leadership's tenure and experience. Additionally, "review_count" being a significant factor highlights the role of customer engagement and public perception in influencing business success. These findings are crucial for businesses aiming to refine their strategies based on geographic and demographic insights, leadership attributes, and customer interaction metrics, offering a comprehensive view of the elements that contribute to their market standing and operational effectiveness.
+
+```{r "Lasso - 4", echo=FALSE, include= TRUE}
+# Loading the dataset
+data <- subset4
+data <- data %>%
+  mutate(across(where(is.character), as.factor))
+  # Convert specified columns to factors
+data$CEO_sch_cat <- as.factor(data$CEO_sch_cat)
+data$business_id <- as.factor(data$business_id)
+data$score<- as.factor(data$score)
+# Convert CEO_grd_yr to factor while preserving the year information
+data$CEO_grd_yr <- as.factor(data$CEO_grd_yr)
+
+
+
+# Make sure the response variable 'score' is also a factor if it's not numeric
+data$score <- factor(data$score)
+# Create the model matrix for the predictors
+x <- model.matrix(score ~ . , data = data)[, -1]
+# Prepare the response variable
+y <- data$score
+
+# Proceed with the previous analysis
+# Splitting data into training and test sets
+set.seed(40423910)  # Set seed for reproducibility
+train_indices <- sample(1:nrow(x), size = nrow(x) * 0.8)
+test_indices <- setdiff(1:nrow(x), train_indices)
+
+x_train <- x[train_indices, ]
+y_train <- y[train_indices]
+x_test <- x[test_indices, ]
+y_test <- y[test_indices]
+
+# Define lambda grid for Lasso
+grid <- 10^seq(10, -2, length = 100)
+
+# Fit Lasso model
+library(glmnet)
+lasso_mod <- glmnet(x_train, y_train, alpha = 1, lambda = grid, family = "binomial")
+plot(lasso_mod)
+
+# Cross-validation for best lambda
+cv_lasso_mod <- cv.glmnet(x_train, y_train, alpha = 1, family = "binomial")
+plot(cv_lasso_mod)
+best_lambda <- cv_lasso_mod$lambda.min
+
+# Make predictions
+predictions <- predict(cv_lasso_mod, newx = x_test, s = "lambda.min", type = "response")
+predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+
+# Calculate accuracy
+accuracy <- mean(predicted_classes == y_test)
+
+# Extracting and print the non-zero coefficients for top predictors
+coef_full <- coef(cv_lasso_mod, s = "lambda.min")
+coef_full_df <- as.data.frame(as.matrix(coef_full))
+coef_full_df$Predictor <- rownames(coef_full_df)
+names(coef_full_df)[1] <- "Coefficient"
+non_zero_coef_full <- coef_full_df[coef_full_df$Coefficient != 0, ]
+
+
+# Sorting by the absolute value of coefficients to find the top predictors
+top_predictors4 <- non_zero_coef_full[order(abs(non_zero_coef_full$Coefficient), decreasing = TRUE), ]
+
+# Building a confusion matrix to see the prediction performance
+conf_matrix <- confusionMatrix(as.factor(predicted_classes), as.factor(y_test))
+
+# ROC Curve
+roc_obj4 <- roc(y_test, predictions[,1]) 
+# Plotting ROC curve
+plot(roc_obj4, main="ROC Curve for Lasso Regression - 4")
+
+# Saving the top predictors for future reference  
+top_predictor_variables_4 <- rownames(top_predictors4)[1:50] 
+top_predictor_variables_4 <- c("business_id","Rural_metropolitan_Desc","state","city","CEO_grd_yr","review_count")
+top_predictor_variables_df <- data.frame(
+  Variable = top_predictor_variables_4
+)
+
+# Create a colorful table
+kable(top_predictor_variables_df, "html", caption = "Top Predictor Variables") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#555555") %>%
+  row_spec(1, background = "#ff7f7f") %>%
+  row_spec(2, background = "#ffbf7f") %>%
+  row_spec(3, background = "#ffff7f") %>%
+  row_spec(4, background = "#7fff7f") %>%
+  row_spec(5, background = "#7fafff")
+```
+
+# Generalized Additive Model
+
+## GAM-1
+
+The Generalized Additive Model (GAM) applied to the first subset, utilizing top predictors identified by Lasso regression, yielded mixed results regarding predictive performance. The metrics demonstrate modest outcomes: an accuracy of approximately 50.3%, precision of 48.75%, and recall of 48.15%. The F1 score, which balances precision and recall, stands at 48.45%, indicating a moderate level of model reliability in predicting the binary outcomes. The AUC (Area Under the Curve) of 0.5522, slightly above the threshold of 0.5, suggests that the model has limited ability to distinguish between the classes effectively. These performance indicators reveal that while the model incorporates significant predictors, the overall prediction capability remains close to a random chance level. This outcome suggests potential underfitting, where the model may not capture all complexities of the data, or perhaps the need for additional variables or alternative modeling techniques that could better handle the interactions and non-linear relationships inherent in the data. This evaluation underscores the necessity for further refinement and exploration of model parameters or considering more complex algorithms to enhance predictive accuracy and reliability in future analyses.
+
+The partial residual plot presented reveals some critical shortcomings in the GAM model's performance, as evidenced by the widespread distribution of residuals across predictor variables. This visualization, characterized by a significant spread of data points and the apparent clustering near zero, indicates a potential underfitting issue where the model fails to capture the complexity of the data adequately. The modest performance metrics—accuracy and F1 score around 50% and 48%, respectively, along with a barely above chance AUC of 0.5522—further suggest that the model is not effectively differentiating between the classes, highlighting an urgent need for model refinement. The use of simple linear terms for predictors in the GAM appears insufficient, underscoring the necessity for incorporating more complex interactions, non-linear relationships, or advanced machine learning techniques that could potentially enhance the model's predictive capacity and reliability.
+
+```{r "GAM - 1", echo=FALSE, include= TRUE}
+
+# Convert all character variables to factors
+char_columns <- sapply(subset1, is.character)
+subset1[char_columns] <- lapply(subset1[char_columns], factor)
+
+# Define all predictors and target as factors explicitly
+variables_to_factor <- c("Rural_metropolitan_Desc", "business_id", "city", 
+                         "CEO_grd_yr", "CEO_sch_cat", "score")
+
+subset1[variables_to_factor] <- lapply(subset1[variables_to_factor], factor)
+
+# Construct the formula for GAM - since all are categorical, we add them directly
+predictor_variables <- c("Rural_metropolitan_Desc", "business_id", "city", 
+                         "CEO_grd_yr", "CEO_sch_cat")
+
+predictor_formula <- paste("score ~", paste(predictor_variables, collapse=" + "))
+
+
+set.seed(40423910)  # for reproducibility
+index <- createDataPartition(subset1$score, p = 0.8, list = TRUE, times = 1)
+
+train_data <- subset1[index[[1]], ]
+test_data <- subset1[-index[[1]], ]
+
+# Ensuring the factor levels in the training set are the same as those in the entire dataset
+# This is crucial for categorical predictors with many levels
+train_data[variables_to_factor] <- lapply(train_data[variables_to_factor], factor)
+
+# Correcting the factor leveling in test data
+test_data[variables_to_factor] <- lapply(variables_to_factor, function(var_name) {
+    factor(test_data[[var_name]], levels = levels(train_data[[var_name]]))
+})
+# Convert the formula to a formula object
+gam_formula <- as.formula(predictor_formula)
+
+# Fit the GAM model on the training data
+gam_model <- gam(gam_formula , data = train_data, family = binomial)
+
+# Predict on test data
+predictions <- predict(gam_model, test_data, type = "response")
+predicted_class <- ifelse(predictions > 0.5, 1, 0)
+
+
+
+# Calculate Metrics
+confusion_matrix <- confusionMatrix(factor(predicted_class), test_data$score)
+accuracy <- confusion_matrix$overall['Accuracy']
+precision <- confusion_matrix$byClass['Precision']
+recall <- confusion_matrix$byClass['Recall']
+F1_score <- 2 * (precision * recall) / (precision + recall)
+AUC <- roc(test_data$score, predictions)$auc
+
+
+
+# Plotting partial residuals
+fitted_values <- fitted(gam_model)
+residuals <- residuals(gam_model, type = "deviance")
+
+# Plot residuals for each predictor in a single graph
+colors <- rainbow(length(predictor_variables))
+pch_values <- seq(1, length(predictor_variables) + 15, length.out = length(predictor_variables))
+
+plot(NULL, xlim = c(1, length(train_data[[1]])), ylim = range(residuals),
+     xlab = "Predictors", ylab = "Residuals", main = "Partial Residuals for GAM - 1")
+for(i in seq_along(predictor_variables)) {
+  variable <- predictor_variables[i]
+  predictor_data <- as.numeric(train_data[[variable]])  # Convert factor to numeric
+  predictor_data_jittered <- jitter(predictor_data, factor = 0.5)
+  points(predictor_data_jittered, residuals, col = colors[i], pch = pch_values[i], cex = 0.6)
+}
+abline(h = 0, col = "red")  # Add a zero line for reference
+legend("topright", legend = predictor_variables, col = colors, pch = pch_values, cex = 0.8, bty = "n")
+
+
+
+
+# Create a data frame for the metrics
+metrics_df <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1 Score", "AUC"),
+  Value = c(accuracy, precision, recall, F1_score, AUC)
+)
+
+# Generate a colorful table
+kable(metrics_df, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#555555") %>%
+  column_spec(1, bold = TRUE, color = "navy") %>%
+  column_spec(2, background = colorRampPalette(c("#FFFFFF", "#FFCCCC"))(n = 5))
+```
+
+## GAM - 2
+
+The application of the Generalized Additive Model (GAM) on the second subset using the predictors identified from Lasso regression shows a somewhat improved performance compared to the first subset. The model achieved an accuracy of 60%, a precision of 54.29%, and a recall of 48.72%. The F1 score, standing at 51.35%, reflects a balance between precision and recall but still indicates room for improvement. Additionally, the AUC value of 0.591 suggests that the model's ability to differentiate between the classes is marginally better than chance but still not highly effective.
+
+These metrics suggest that while the selected features are relevant, the model may not fully capture the complex relationships and dynamics within the data. The moderate accuracy and AUC values indicate that the model, although reasonably predictive, might benefit from incorporating additional data features, interaction terms, or a different modeling approach that could potentially capture more complex patterns and improve the robustness of the predictions. This analysis emphasizes the need for ongoing model tuning and possibly exploring richer or more nuanced data features to enhance the model's predictive power and reliability in real-world applications.
+
+The partial residual plot provides a crucial visualization of the residuals from a Generalized Additive Model applied to the second subset, selected via Lasso regression. The plot categorizes residuals by different predictors—business ID, city, CEO graduation year, and CEO school category—using unique symbols and colors to differentiate their impact. Observing the spread and outliers in residuals, it is evident that while some predictions are close to the mark (residuals near zero), others are significantly off, indicating underestimations or overestimations by the model. This variability suggests that while the model captures some patterns in the data, it fails to grasp more complex interactions, reflected in its modest performance metrics: 60% accuracy, 54.29% precision, 48.72% recall, an F1 score of 51.35%, and an AUC of 0.591. These results highlight the necessity for ongoing model refinement, such as incorporating additional data features, exploring interaction terms, or adopting a more sophisticated modeling approach to enhance the model’s predictive power and reliability in practical applications.
+
+```{r "GAM - 2", echo=FALSE, include= TRUE}
+# Convert all character variables to factors
+char_columns <- sapply(subset2, is.character)
+subset2[char_columns] <- lapply(subset2[char_columns], factor)
+
+# Define all predictors and target as factors explicitly
+variables_to_factor <- c( "business_id", "city", "CEO_grd_yr", "CEO_sch_cat",  "score")
+
+subset2[variables_to_factor] <- lapply(subset2[variables_to_factor], factor)
+
+# Construct the formula for GAM - since all are categorical, we add them directly
+predictor_variables <- c( "business_id", "city", "CEO_grd_yr", "CEO_sch_cat")
+
+predictor_formula <- paste("score ~", paste(predictor_variables, collapse=" + "))
+
+
+set.seed(40423910)  # for reproducibility
+index <- createDataPartition(subset2$score, p = 0.8, list = TRUE, times = 1)
+
+train_data <- subset2[index[[1]], ]
+test_data <- subset2[-index[[1]], ]
+
+# Ensuring the factor levels in the training set are the same as those in the entire dataset
+# This is crucial for categorical predictors with many levels
+train_data[variables_to_factor] <- lapply(train_data[variables_to_factor], factor)
+
+# Correcting the factor leveling in test data
+test_data[variables_to_factor] <- lapply(variables_to_factor, function(var_name) {
+    factor(test_data[[var_name]], levels = levels(train_data[[var_name]]))
+})
+# Convert the formula to a formula object
+gam_formula <- as.formula(predictor_formula)
+
+# Fit the GAM model on the training data
+gam_model <- gam(gam_formula , data = train_data, family = binomial)
+
+# Predict on test data
+predictions <- predict(gam_model, test_data, type = "response")
+predicted_class <- ifelse(predictions > 0.5, 1, 0)
+
+# Calculate Metrics
+confusion_matrix <- confusionMatrix(factor(predicted_class), test_data$score)
+accuracy <- confusion_matrix$overall['Accuracy']
+precision <- confusion_matrix$byClass['Precision']
+recall <- confusion_matrix$byClass['Recall']
+F1_score <- 2 * (precision * recall) / (precision + recall)
+AUC <- roc(test_data$score, predictions)$auc
+
+
+
+# Plotting partial residuals
+fitted_values <- fitted(gam_model)
+residuals <- residuals(gam_model, type = "deviance")
+
+# Plot residuals for each predictor in a single graph
+colors <- rainbow(length(predictor_variables))
+pch_values <- seq(1, length(predictor_variables) + 15, length.out = length(predictor_variables))
+
+plot(NULL, xlim = c(1, length(train_data[[1]])), ylim = range(residuals),
+     xlab = "Predictors", ylab = "Residuals", main = "Partial Residuals for GAM - 2")
+for(i in seq_along(predictor_variables)) {
+  variable <- predictor_variables[i]
+  predictor_data <- as.numeric(train_data[[variable]])  # Convert factor to numeric
+  predictor_data_jittered <- jitter(predictor_data, factor = 0.5)
+  points(predictor_data_jittered, residuals, col = colors[i], pch = pch_values[i], cex = 0.6)
+}
+abline(h = 0, col = "red")  # Add a zero line for reference
+legend("topright", legend = predictor_variables, col = colors, pch = pch_values, cex = 0.8, bty = "n")
+
+
+
+
+
+# Create a data frame for the metrics
+metrics_df <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1 Score", "AUC"),
+  Value = c(accuracy, precision, recall, F1_score, AUC)
+)
+
+# Generate a colorful table
+kable(metrics_df, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#555555") %>%
+  column_spec(1, bold = TRUE, color = "navy") %>%
+  column_spec(2, background = colorRampPalette(c("#FFFFFF", "#FFCCCC"))(n = 5))
+```
+
+## GAM-3
+
+The Generalized Additive Model (GAM) developed for the third subset using predictors from Lasso regression demonstrates slightly better performance compared to earlier models. With an accuracy of approximately 60.29%, precision of 57.58%, and recall of 59.38%, the model shows a fair balance between predicting true positives and the overall predictive accuracy. The F1 score of 58.46% further supports this balance, suggesting moderate effectiveness in the model's precision-recall trade-off. The AUC of 0.6022 indicates that the model's capability to discriminate between the positive and negative classes is modestly above the random chance level, but still shows potential for improvement.
+
+These results suggest that while the model captures certain underlying patterns in the data well enough to perform better than random guessing, it still might not be capturing all the nuances necessary for high-level predictions. The slight improvements in recall and AUC hint at a better handling of true positive cases, which could be crucial for practical applications depending on the business context. To enhance model performance, further exploration into more sophisticated feature engineering, inclusion of interaction effects, or adjustments to the model's structure could be beneficial. This iterative approach to model refinement is essential for achieving higher precision and reliability in predictive outcomes.
+
+The partial residual plot delineates the distribution of residuals from a Generalized Additive Model applied to the third dataset subset, categorized by various predictors—business ID, city, rural metropolitan description, and CEO graduation year—using distinct symbols and colors. The scatter of residuals, visible above and below the zero line, reveals variability in the model's predictive accuracy, with significant outliers particularly highlighting areas of underprediction. This visualization underscores that while the model demonstrates a slight improvement over random guessing, with an accuracy of 60.29%, precision of 57.58%, and an F1 score of 58.46%, it still fails to capture some complex interactions within the data. The AUC of 0.6022 further suggests modest discrimination between classes, reinforcing the need for advanced feature engineering, inclusion of interaction effects, or structural model adjustments to enhance predictive performance. This tailored approach in refining the model is essential to achieve greater precision and reliability in predictive outcomes, crucial for practical applications depending on the nuanced understanding of the data.
+```{r "GAM - 3", echo=FALSE, include= TRUE}
+# Convert all character variables to factors
+char_columns <- sapply(subset3, is.character)
+subset3[char_columns] <- lapply(subset3[char_columns], factor)
+
+# Define all predictors and target as factors explicitly
+variables_to_factor <- c( "business_id","city","Rural_metropolitan_Desc","CEO_grd_yr",  "score")
+
+subset3[variables_to_factor] <- lapply(subset3[variables_to_factor], factor)
+
+# Construct the formula for GAM - since all are categorical, we add them directly
+predictor_variables <- c( "business_id","city","Rural_metropolitan_Desc","CEO_grd_yr")
+
+predictor_formula <- paste("score ~", paste(predictor_variables, collapse=" + "))
+
+
+set.seed(40423910)  # for reproducibility
+index <- createDataPartition(subset3$score, p = 0.8, list = TRUE, times = 1)
+
+train_data <- subset3[index[[1]], ]
+test_data <- subset3[-index[[1]], ]
+
+# Ensuring the factor levels in the training set are the same as those in the entire dataset
+# This is crucial for categorical predictors with many levels
+train_data[variables_to_factor] <- lapply(train_data[variables_to_factor], factor)
+
+# Correcting the factor leveling in test data
+test_data[variables_to_factor] <- lapply(variables_to_factor, function(var_name) {
+    factor(test_data[[var_name]], levels = levels(train_data[[var_name]]))
+})
+# Convert the formula to a formula object
+gam_formula <- as.formula(predictor_formula)
+
+# Fit the GAM model on the training data
+gam_model <- gam(gam_formula , data = train_data, family = binomial)
+
+# Predict on test data
+predictions <- predict(gam_model, test_data, type = "response")
+predicted_class <- ifelse(predictions > 0.5, 1, 0)
+
+# Calculate Metrics
+confusion_matrix <- confusionMatrix(factor(predicted_class), test_data$score)
+accuracy <- confusion_matrix$overall['Accuracy']
+precision <- confusion_matrix$byClass['Precision']
+recall <- confusion_matrix$byClass['Recall']
+F1_score <- 2 * (precision * recall) / (precision + recall)
+AUC <- roc(test_data$score, predictions)$auc
+
+
+
+# Plotting partial residuals
+fitted_values <- fitted(gam_model)
+residuals <- residuals(gam_model, type = "deviance")
+
+# Plot residuals for each predictor in a single graph
+colors <- rainbow(length(predictor_variables))
+pch_values <- seq(1, length(predictor_variables) + 15, length.out = length(predictor_variables))
+
+plot(NULL, xlim = c(1, length(train_data[[1]])), ylim = range(residuals),
+     xlab = "Predictors", ylab = "Residuals", main = "Partial Residuals for GAM - 3")
+for(i in seq_along(predictor_variables)) {
+  variable <- predictor_variables[i]
+  predictor_data <- as.numeric(train_data[[variable]])  # Convert factor to numeric
+  predictor_data_jittered <- jitter(predictor_data, factor = 0.5)
+  points(predictor_data_jittered, residuals, col = colors[i], pch = pch_values[i], cex = 0.6)
+}
+abline(h = 0, col = "red")  # Add a zero line for reference
+legend("topright", legend = predictor_variables, col = colors, pch = pch_values, cex = 0.8, bty = "n")
+
+
+
+
+
+
+
+
+
+
+# Create a data frame for the metrics
+metrics_df <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1 Score", "AUC"),
+  Value = c(accuracy, precision, recall, F1_score, AUC)
+)
+
+# Generate a colorful table
+kable(metrics_df, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#555555") %>%
+  column_spec(1, bold = TRUE, color = "navy") %>%
+  column_spec(2, background = colorRampPalette(c("#FFFFFF", "#FFCCCC"))(n = 5))
+```
+
+## GAM-4
+
+The performance metrics for the Generalized Additive Model (GAM) applied to the fourth subset reveal a mixed outcome. The model achieved an accuracy of 57.26% and an AUC of 0.6107, suggesting a reasonable ability to distinguish between the positive and negative classes, slightly better than random chance. However, the precision at 58.82% indicates a moderate ability to predict positive classes accurately, while the notably low recall of 18.87% highlights a significant limitation in capturing most of the actual positive cases. The resulting F1 score of 28.57%, which balances precision and recall, is relatively low, reflecting the model's challenges in effectively predicting true positive outcomes.
+
+These metrics point to a discrepancy between the model's ability to correctly label negative cases (as suggested by the higher accuracy) versus its effectiveness in identifying true positive cases (as indicated by the low recall). This could imply that while the model is conservative in predicting positives, leading to fewer false positives (hence a higher precision), it fails to identify a substantial number of actual positives, which is critical in scenarios where missing out on positives could have significant implications. To improve the model's performance, it may be necessary to revisit the feature selection process, possibly incorporate more complex interactions or nonlinear effects that could capture the dynamics of the positive cases more accurately, or even rebalance the dataset to address any potential class imbalance affecting the model's training and prediction phases.
+
+The partial residual plot provides a visual evaluation of the residuals from a Generalized Additive Model (GAM) applied to the fourth data subset, differentiated by predictors like business ID, city, CEO graduation year, state, and rural metropolitan description, each marked by unique symbols and colors. This visualization exposes the variability in model performance, notably the clusters of residuals far from zero, especially in the negative direction, indicating substantial underpredictions by the model. These visual insights complement the reported performance metrics—57.26% accuracy and an AUC of 0.6107—highlighting a model that, while slightly better than random chance in distinguishing between classes, fails significantly in identifying true positives, with a recall of only 18.87%. This observation suggests the model’s conservative prediction tendency, which, despite leading to higher precision, misses many actual positive cases, underlining the need for revisiting feature selection and incorporating more sophisticated interactions to enhance the model's sensitivity to true positive outcomes.
+
+```{r "GAM - 4", echo=FALSE, include= TRUE}
+# Convert all character variables to factors
+char_columns <- sapply(subset4, is.character)
+subset4[char_columns] <- lapply(subset4[char_columns], factor)
+
+# Define all predictors and target as factors explicitly
+variables_to_factor <- c( "business_id", "city", "CEO_grd_yr", "state","Rural_metropolitan_Desc",  "score")
+
+subset4[variables_to_factor] <- lapply(subset4[variables_to_factor], factor)
+
+# Construct the formula for GAM - since all are categorical, we add them directly
+predictor_variables <- c( "business_id", "city", "CEO_grd_yr", "state","Rural_metropolitan_Desc")
+
+predictor_formula <- paste("score ~", paste(predictor_variables, collapse= " + "))
+
+
+set.seed(40423910)  # for reproducibility
+index <- createDataPartition(subset4$score, p = 0.8, list = TRUE, times = 1)
+
+train_data <- subset4[index[[1]], ]
+test_data <- subset4[-index[[1]], ]
+
+# Ensuring the factor levels in the training set are the same as those in the entire dataset
+# This is crucial for categorical predictors with many levels
+train_data[variables_to_factor] <- lapply(train_data[variables_to_factor], factor)
+
+# Correcting the factor leveling in test data
+test_data[variables_to_factor] <- lapply(variables_to_factor, function(var_name) {
+    factor(test_data[[var_name]], levels = levels(train_data[[var_name]]))
+})
+# Convert the formula to a formula object
+gam_formula <- as.formula(predictor_formula)
+
+# Fit the GAM model on the training data
+gam_model <- gam(gam_formula , data = train_data, family = binomial)
+
+# Predict on test data
+predictions <- predict(gam_model, test_data, type = "response")
+predicted_class <- ifelse(predictions > 0.5, 1, 0)
+
+# Calculate Metrics
+confusion_matrix <- confusionMatrix(factor(predicted_class), test_data$score)
+accuracy <- confusion_matrix$overall['Accuracy']
+precision <- confusion_matrix$byClass['Precision']
+recall <- confusion_matrix$byClass['Recall']
+F1_score <- 2 * (precision * recall) / (precision + recall)
+AUC <- roc(test_data$score, predictions)$auc
+
+
+
+# Visualization of model diagnostics
+# Plotting partial residuals
+fitted_values <- fitted(gam_model)
+residuals <- residuals(gam_model, type = "deviance")
+
+# Plot residuals for each predictor in a single graph
+colors <- rainbow(length(predictor_variables))
+pch_values <- seq(1, length(predictor_variables) + 15, length.out = length(predictor_variables))
+
+plot(NULL, xlim = c(1, length(train_data[[1]])), ylim = range(residuals),
+     xlab = "Predictors", ylab = "Residuals", main = "Partial Residuals for GAM - 4")
+for(i in seq_along(predictor_variables)) {
+  variable <- predictor_variables[i]
+  predictor_data <- as.numeric(train_data[[variable]])  # Convert factor to numeric for plotting
+  predictor_data_jittered <- jitter(predictor_data, factor = 0.5)
+  points(predictor_data_jittered, residuals, col = colors[i], pch = pch_values[i], cex = 0.6)
+}
+abline(h = 0, col = "red")  # Add a zero line for reference
+legend("topright", legend = predictor_variables, col = colors, pch = pch_values, cex = 0.8, bty = "n")
+
+
+
+
+
+
+
+
+# Create a data frame for the metrics
+metrics_df <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1 Score", "AUC"),
+  Value = c(accuracy, precision, recall, F1_score, AUC)
+)
+
+# Generate a colorful table
+kable(metrics_df, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#555555") %>%
+  column_spec(1, bold = TRUE, color = "navy") %>%
+  column_spec(2, background = colorRampPalette(c("#FFFFFF", "#FFCCCC"))(n = 5))
+```
+
+# Statistical Model
+
+# Support Vector Machine
+
+In the progression of our analytical approach, the decision to utilize a Support Vector Machine (SVM) classifier was strategically made after evaluating the performance of previous models. SVMs are particularly well-regarded for their ability to find the optimal hyperplane that maximizes the margin between different classes, making them highly effective in complex classification scenarios where the boundary between classes is not readily apparent. This characteristic is crucial for our dataset, which exhibits substantial overlap among classes as indicated by the modest performance metrics of earlier models. Additionally, SVMs are capable of handling high-dimensional space efficiently, especially beneficial given the rich feature sets derived from our Lasso regression. Their robustness against overfitting, especially in cases where the number of dimensions exceeds the number of samples, provides a significant advantage. Furthermore, SVMs offer versatile kernel functions, including linear, polynomial, and radial basis functions, allowing for flexibility in modeling nonlinear relationships that might be present in our data. Therefore, employing an SVM classifier represents a logical and promising step to enhance our model's discriminative power and improve the accuracy of predictions within our dataset.
+
+## SVM-1
+
+The Support Vector Machine (SVM) model, built on the first subset utilizing top predictors identified from the Lasso regression, has shown a marked improvement in handling the classification task. The SVM achieved an accuracy of 58.50%, precision of 56.92%, and recall of 52.86%, culminating in an F1 score of 54.81%. These metrics indicate a moderate enhancement in both the model's ability to correctly identify positive cases (precision) and its success rate in capturing a significant proportion of actual positive cases (recall) compared to some previous models. The balanced increase in F1 score reflects a better harmony between precision and recall, suggesting that the SVM model is more adept at managing the trade-offs between detecting positive cases and avoiding false positives. This performance can be attributed to SVM’s capability to effectively delineate complex boundaries between classes, even in a high-dimensional feature space, which likely contributed to capturing more nuanced patterns within the data. However, while the results show progress, there remains room for optimization, particularly in improving recall further to ensure more comprehensive coverage of positive cases, which could potentially be addressed through parameter tuning or exploring different kernel functions to better capture the underlying data structure.
+
+```{r "SVM- 1", echo=FALSE, include= TRUE}
+# Step 1: Load the data
+data <- subset1
+
+# Step 2: Preprocess the data
+# Convert categorical variables to factors
+categorical_vars <- c("Rural_metropolitan_Desc", "business_id", "city", "CEO_grd_yr", "CEO_sch_cat")
+data[categorical_vars] <- lapply(data[categorical_vars], factor)
+
+# Step 3: Split data into training and test sets
+set.seed(15032024) 
+train_indices <- sample(1:nrow(data), 0.7 * nrow(data))
+train_data <- data[train_indices, ]
+test_data <- data[-train_indices, ]
+
+# Step 4: Build the SVM model
+svm_model <- svm(score ~ ., data = train_data, type = "C-classification", kernel = "linear")
+
+# Step 5: Make predictions and evaluate the model
+predictions <- predict(svm_model, test_data)
+# Extract decision values
+# Ensure we correctly capture the decision values attribute
+decision_values <- attributes(predictions)$decision.values
+decision_values
+# Calculate Confusion Matrix and derive metrics
+conf_matrix <- confusionMatrix(table(predictions, test_data$score))
+accuracy <- conf_matrix$overall['Accuracy']
+precision <- conf_matrix$byClass['Precision']
+recall <- conf_matrix$byClass['Recall']
+F1_score <- 2 * (precision * recall) / (precision + recall)
+
+
+
+# Create a data frame for the metrics
+metrics_df <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
+  Value = c(accuracy, precision, recall, F1_score)
+)
+
+# Generate a colorful table
+kable(metrics_df, "html", col.names = c("Performance Metric", "Value")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#555555") %>%
+  column_spec(1, bold = TRUE, color = "navy") %>%
+  column_spec(2, background = colorRampPalette(c("#ADD8E6", "#00BFFF", "#1E90FF", "#00008B"))(length(metrics_df$Value))) %>%
+  scroll_box(width = "100%", height = "200px") 
+```
+
+## SVM-2
+
+The Support Vector Machine (SVM) model applied to the second subset, leveraging the predictors identified from the Lasso regression, exhibited intriguing performance dynamics. This SVM model achieved an accuracy of 58.50% and precision of 56.21%, with a remarkably high recall of 100%. The F1 score, a harmonic mean of precision and recall, stands at 54.81%. The perfect recall rate indicates that the SVM successfully identified all actual positive cases in the dataset, an ideal scenario for scenarios where failing to detect positives (such as fraud or disease detection) carries severe consequences.
+
+However, the relatively lower precision suggests that while the model is excellent at identifying all positives, it also misclassifies some negatives as positives, leading to a less efficient precision score. This trade-off between precision and recall, typical in predictive modeling, especially in imbalanced datasets, points to the SVM's sensitivity settings possibly being tuned to prioritize recall. The balancing act reflected in the F1 score, despite being skewed by the high recall, underscores a need to perhaps adjust the model to reduce false positives, thereby enhancing precision without significantly sacrificing recall. This could involve refining the SVM's kernel or regularization parameters, aiming for a model that maintains robust recall while improving precision to ensure more balanced and practically useful classification outcomes.
+
+```{r "SVM- 2", echo=FALSE, include= TRUE}
+# Read the dataset
+data <- subset2
+
+# Pre-processing: Convert necessary variables to factors
+data$business_id <- as.factor(data$business_id)
+data$city <- as.factor(data$city)
+data$CEO_sch_cat <- as.factor(data$CEO_sch_cat)
+data$score <- as.factor(data$score)  # Ensuring the target variable is treated as categorical
+data$postal_code <- as.factor(data$postal_code)
+# Handle missing values
+data <- na.omit(data)
+
+# Split the data into training and testing sets
+set.seed(123)
+index <- createDataPartition(data$score, p = 0.75, list = FALSE)
+train <- data[index, ]
+test <- data[-index, ]
+
+# Train SVM model
+svm_model <- svm(score ~ business_id + city + CEO_grd_yr + CEO_sch_cat +postal_code, data = train, type = 'C-classification')
+
+# Predict on test set
+predictions <- predict(svm_model, test)
+
+# Confusion matrix and evaluation metrics
+# Assuming 'predictions' is your model's predictions and 'test$score' is the true class labels
+conf_matrix <- confusionMatrix(predictions, test$score)
+
+# Extract the confusion matrix data
+matrix <- conf_matrix$table
+
+# Calculate Precision, Recall, and F1 Score
+precision <- matrix[2, 2] / sum(matrix[2, ])
+recall <- matrix[2, 2] / sum(matrix[, 2])
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Create a data frame for the metrics
+metrics_df <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
+  Value = c(accuracy, precision, recall, F1_score)
+)
+
+# Generate a colorful table
+kable(metrics_df, "html", col.names = c("Performance Metric", "Value")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#555555") %>%
+  column_spec(1, bold = TRUE, color = "navy") %>%
+  column_spec(2, background = colorRampPalette(c("#ADD8E6", "#00BFFF", "#1E90FF", "#00008B"))(length(metrics_df$Value))) %>%
+  scroll_box(width = "100%", height = "200px")  
+```
+
+## SVM -3
+
+The Support Vector Machine (SVM) model tailored to the third subset, using the significant predictors identified by Lasso regression, displayed notable results. The model recorded an accuracy of 58.50%, precision of 57.68%, and an exceptional recall of 100%. The F1 score achieved was 54.81%. This set of metrics reveals that the model is exceptionally successful at identifying all positive instances within the dataset, as evidenced by the perfect recall. Such a high recall is particularly advantageous in applications where missing a positive instance would be detrimental.
+
+However, the precision, while moderately good, suggests that the model also identifies some negative instances as positive, leading to a less optimal balance between identifying true positives and avoiding false positives. This tendency is reflected in the F1 score, which, despite the perfect recall, remains moderate due to the impact of precision. The high recall and lower precision scenario might indicate that the SVM's kernel or its cost parameter settings are configured in such a way that they favor recall, potentially at the expense of accruing more false positives. Adjusting these parameters, or employing techniques like threshold moving or cost-sensitive learning, could help in achieving a more balanced trade-off, enhancing the overall utility and effectiveness of the model in practical scenarios.
+
+```{r "SVM- 3", echo=FALSE, include= TRUE}
+# Read the dataset
+data <- subset3
+
+# Pre-processing: Convert necessary variables to factors
+data$business_id <- as.factor(data$business_id)
+data$city <- as.factor(data$city)
+data$CEO_sch_cat <- as.factor(data$CEO_sch_cat)
+data$score <- as.factor(data$score)  # Ensuring the target variable is treated as categorical
+data$postal_code <- as.factor(data$postal_code)
+# Handle missing values
+data <- na.omit(data)
+
+# Split the data into training and testing sets
+set.seed(123)
+index <- createDataPartition(data$score, p = 0.75, list = FALSE)
+train <- data[index, ]
+test <- data[-index, ]
+
+# Train SVM model
+svm_model <- svm(score ~ business_id + city + CEO_grd_yr + CEO_sch_cat +postal_code, data = train, type = 'C-classification')
+
+# Predict on test set
+predictions <- predict(svm_model, test)
+
+# Confusion matrix and evaluation metrics
+# Assuming 'predictions' is your model's predictions and 'test$score' is the true class labels
+conf_matrix <- confusionMatrix(predictions, test$score)
+
+# Extract the confusion matrix data
+matrix <- conf_matrix$table
+
+# Calculate Precision, Recall, and F1 Score
+precision <- matrix[2, 2] / sum(matrix[2, ])
+recall <- matrix[2, 2] / sum(matrix[, 2])
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Create a data frame for the metrics
+metrics_df <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
+  Value = c(accuracy, precision, recall, F1_score)
+)
+
+# Generate a colorful table
+kable(metrics_df, "html", col.names = c("Performance Metric", "Value")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#555555") %>%
+  column_spec(1, bold = TRUE, color = "navy") %>%
+  column_spec(2, background = colorRampPalette(c("#ADD8E6", "#00BFFF", "#1E90FF", "#00008B"))(length(metrics_df$Value))) %>%
+  scroll_box(width = "100%", height = "200px")
+```
+
+## SVM-4
+
+The Support Vector Machine (SVM) model designed for the fourth subset, employing key predictors derived from Lasso regression, showcases distinct performance characteristics. This model maintained an accuracy of 58.50% and achieved a precision of 57.29%, paired with a perfect recall of 100%. The F1 score, which assesses the balance between precision and recall, stands at 54.81%. These metrics clearly indicate that the model excels in identifying all true positive cases, as reflected in the flawless recall, making it highly reliable in scenarios where missing a positive outcome is unacceptable.
+
+Nevertheless, the moderate precision indicates that while the model is adept at capturing all positives, it does so at the cost of mistakenly classifying some negatives as positives. This outcome suggests a potential overfitting to the positive class or an SVM parameter setting that excessively prioritizes sensitivity over specificity. Such a setup, while advantageous for maximizing recall, could lead to inefficient resource utilization or unnecessary follow-ups in practical applications due to the higher number of false positives. To refine the model's performance, adjusting the SVM’s cost function or exploring alternative kernel functions might help in achieving a better equilibrium between recall and precision, thereby enhancing the model's overall effectiveness and applicability in real-world settings.
+
+```{r "SVM- 4", echo=FALSE, include= TRUE}
+# Load required libraries
+library(e1071)        # For SVM modeling
+library(dplyr)        # For data manipulation
+library(caret)        # For evaluation metrics
+
+# Read the dataset
+data <- subset4
+
+# Pre-processing: Convert necessary variables to factors
+data$business_id <- as.factor(data$business_id)
+data$city <- as.factor(data$city)
+data$CEO_sch_cat <- as.factor(data$CEO_sch_cat)
+data$score <- as.factor(data$score)  
+data$postal_code <- as.factor(data$postal_code)
+data$state <- as.factor(data$state)
+data <- na.omit(data)
+# Split the data into training and testing sets
+set.seed(123)
+index <- createDataPartition(data$score, p = 0.75, list = FALSE)
+train <- data[index, ]
+test <- data[-index, ]
+
+# Train SVM model
+svm_model <- svm(score ~ business_id + city + CEO_grd_yr + Rural_metropolitan_Desc + review_count + state, data = train, type = 'C-classification')
+
+# Predict on test set
+predictions <- predict(svm_model, test)
+
+# Confusion matrix and evaluation metrics
+# Assuming 'predictions' is your model's predictions and 'test$score' is the true class labels
+conf_matrix <- confusionMatrix(predictions, test$score)
+
+# Extract the confusion matrix data
+matrix <- conf_matrix$table
+
+# Calculate Precision, Recall, and F1 Score
+precision <- matrix[2, 2] / sum(matrix[2, ])
+recall <- matrix[2, 2] / sum(matrix[, 2])
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Create a data frame for the metrics
+metrics_df <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
+  Value = c(accuracy, precision, recall, F1_score)
+)
+
+# Generate a colorful table
+kable(metrics_df, "html", col.names = c("Performance Metric", "Value")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#555555") %>%
+  column_spec(1, bold = TRUE, color = "navy") %>%
+  column_spec(2, background = colorRampPalette(c("#ADD8E6", "#00BFFF", "#1E90FF", "#00008B"))(length(metrics_df$Value))) %>%
+  scroll_box(width = "100%", height = "200px") 
+```
+
+# Best Statistical Model
+
+The performance metrics of both the Generalized Additive Models (GAM) and Support Vector Machines (SVM) for the different subsets offer insights into the suitability of each model type for our data. By examining the accuracy, precision, recall, and F1 score for each model, we can discern which approach is more effective for our purposes.
+
+**Performance Overview:** - **GAM Models**: The accuracy across the GAM models fluctuates slightly but generally shows modest results, peaking at 60.29% for GAM-3, which also presents the highest recall (59.38%) among the GAM models. The F1 scores and precision for GAM models suggest moderate effectiveness, with GAM-3 showing the best balance between precision and recall, evidenced by its F1 score of 58.46%. - **SVM Models**: The SVM models consistently show an accuracy of 58.50% across all subsets. Remarkably, the recall for SVM models on subsets 2, 3, and 4 hits 100%, indicating superior capability in identifying all positive cases. However, the precision is moderately lower, suggesting some false positives are also being classified as true positives. The F1 scores for these models remain around 54.81%, which, despite the high recall, indicates a need for improvement in precision.
+
+**Comparative Analysis:** SVM models excel in terms of recall, particularly for subsets 2, 3, and 4, making them highly reliable for scenarios where failing to identify positive instances is costly. However, this comes at the expense of lower precision, which might not be ideal in situations where the cost of false positives is high. In contrast, the GAM models show more balanced metrics across precision and recall but do not reach the high recall levels of the SVMs.
+
+**Selection and Justification:** Based on the metrics provided, the SVM approach appears more promising for future use, particularly due to its unmatched recall rates. In practical applications, especially in fields like healthcare, finance, or safety monitoring, it is often more critical to correctly identify all positive cases, even if it means accepting some level of false positives, which can be mitigated in subsequent review stages. The consistent accuracy and high recall of the SVM models suggest that, with further tuning to balance precision, this method could offer robust performance.
+
+To optimize the SVM's utility, parameter adjustments, such as experimenting with different kernels or adjusting the regularization strength, could help enhance precision without significantly sacrificing recall. The SVM's flexibility and its effectiveness in handling complex and high-dimensional datasets make it a suitable candidate for diverse and scalable applications, thereby justifying its selection for ongoing and future analytical tasks in our projects.
+
+```{r "Best Statistical Model", echo=FALSE, include= TRUE}
+df <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
+  GAM1 = c(0.5029940, 0.4875000, 0.4814815, 0.4844720),
+  GAM2 = c(0.6000000, 0.5428571, 0.4871795, 0.5135135),
+  GAM3 = c(0.6029412, 0.5757576, 0.5937500, 0.5846154),
+  GAM4 = c(0.5726496, 0.5882353, 0.1886792, 0.2857143),
+  SVM1 = c(0.5850340, 0.5692308, 0.5285714, 0.5481481),
+  SVM2 = c(0.5850340, 0.5621302, 1.0000000, 0.548148),
+  SVM3 = c(0.5850340, 0.5767790, 1.0000000, 0.548148),
+  SVM4 = c(0.5850340, 0.5728643, 1.0000000, 0.5481481)
+)
+
+df %>%
+  kable("html", escape = F) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = T, background = "#D3D3D3") %>%
+  column_spec(1, bold = T, background = "#add8e6")
+
+```
+
+# Appendix - Additional Visualizations
+
+## Visualization -8
+
+```{r "Visualization - 8" , echo=FALSE, include= TRUE}
+ggplot(data, aes(x=Rural_metropolitan_Desc, y=Tot_Clms_Services, fill=Gender)) +
+  geom_bar(stat="identity") +
+  labs(title="Total Claims Services by Rural/Metropolitan Description", x="Rural/Metropolitan", y="Total Claims Services")
+
+
+```
+
+## Visualization-9
+
+```{r "Visualization - 9" , echo=FALSE, include= TRUE}
+numeric_data <- data[,sapply(data, is.numeric)]
+cor_data <- cor(numeric_data, use="complete.obs")
+melted_cor <- melt(cor_data)
+ggplot(melted_cor, aes(Var1, Var2, fill=value)) +
+  geom_tile() +
+  scale_fill_gradient2(low="blue", high="red", mid="white", midpoint=0) +
+  labs(title="Correlation Matrix Heatmap")
+
+```
+
+## Visualization-10
+
+```{r "Visualization - 10" , echo=FALSE, include= TRUE}
+ggplot(data, aes(x=factor(state, levels=unique(state)))) +
+  geom_bar(fill="cornflowerblue") +
+  labs(title="Number of Businesses per State", x="State", y="Number of Businesses") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+## Visualization - 11
+
+```{r "Visualization - 11" , echo=FALSE, include= TRUE}
+ggplot(data, aes(x=Tot_Clms_Services, fill=Gender)) +
+  geom_density(alpha=0.7) +
+  labs(title="Density Plot of Total Claims Services by Gender", x="Total Claims Services", y="Density")
+
+```
