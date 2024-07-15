@@ -1,5 +1,5 @@
 ---
-author: "SURIYA SUBBIAH PERUMAL (40423910)"
+author: "SURIYA SUBBIAH PERUMAL "
 date: "15/03/2024"
 output: html_document
 params:
