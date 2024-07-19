@@ -1,0 +1,1 @@
+[Unlocking Real Estate Insights A High-Precision Regression Model for Predicting House Prices.docx](https://github.com/user-attachments/files/16310516/Unlocking.Real.Estate.Insights.A.High-Precision.Regression.Model.for.Predicting.House.Prices.docx)
