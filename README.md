@@ -1,2 +1,1 @@
-[Unlocking Real Estate Insights A High-Precision Regression Model for Predicting House Prices.docx](https://github.com/user-attachments/files/16310516/Unlocking.Real.Estate.Insights.A.High-Precision.Regression.Model.for.Predicting.House.Prices.docx)
-[Banking on Algorithms Revolutionizing Term Deposit Strategies with Machine Learning.docx](https://github.com/user-attachments/files/16310568/Banking.on.Algorithms.Revolutionizing.Term.Deposit.Strategies.with.Machine.Learning.docx)
+
